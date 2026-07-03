@@ -7,7 +7,6 @@ import { useMutation } from "@tanstack/react-query";
 import { MessageCircle, Mail, Lock, User } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

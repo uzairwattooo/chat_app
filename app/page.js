@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { MessageCircle, ShieldCheck, Search, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-[#F8FAFC]">
+      <Button
+        onClick={() => toast.success("Hello Jani")}
+      >
+        Test Toast
+      </Button>
       <header className="border-b border-[#E2E8F0] bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
           <Link href="/" className="flex items-center gap-2">

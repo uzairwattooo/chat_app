@@ -1,3 +1,4 @@
+import { Toaster } from "sonner";
 import "./globals.css";
 import Providers from "./providers";
 
@@ -14,6 +15,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-full flex flex-col" cz-shortcut-listen="true">
         <Providers>
           {children}
+          <Toaster richColors position="top-center" />
         </Providers>
       </body>
     </html>
