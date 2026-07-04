@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import { Image, Send, Smile } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSendMessage } from "@/hooks/useSendMessage";
+import { useEffect, useState, useRef } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function MessageInput({ selectedChat }) {
     const [text, setText] = useState("");
+    const typingTimeoutRef = useRef(null);
     const sendMutation = useSendMessage();
-
+    useEffect(() => {
+        setText("");
+    }, [selectedChat?.conversationId]);
     const handleSend = () => {
         if (!text.trim()) return;
         if (!selectedChat?.conversationId) return;
@@ -35,7 +39,27 @@ export default function MessageInput({ selectedChat }) {
 
                 <Input
                     value={text}
-                    onChange={(e) => setText(e.target.value)}
+                    onChange={(e) => {
+                        setText(e.target.value);
+                        if (!selectedChat?.conversationId) return;
+                        supabase.channel(`typing-${selectedChat.conversationId}`).send({
+                            type: "broadcast",
+                            event: "typing",
+                            payload: {
+                                conversationId: selectedChat.conversationId,
+                            },
+                        });
+                        clearTimeout(typingTimeoutRef.current);
+                        typingTimeoutRef.current = setTimeout(() => {
+                            supabase.channel(`typing-${selectedChat.conversationId}`).send({
+                                type: "broadcast",
+                                event: "stop-typing",
+                                payload: {
+                                    conversationId: selectedChat.conversationId,
+                                },
+                            });
+                        }, 1000);
+                    }}
                     onKeyDown={(e) => {
                         if (e.key === "Enter") handleSend();
                     }}

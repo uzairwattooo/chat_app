@@ -12,6 +12,8 @@ export const user = pgTable("user", {
         .defaultNow()
         .$onUpdate(() => /* @__PURE__ */ new Date())
         .notNull(),
+    isOnline: boolean("is_online").default(false),
+    lastSeen: timestamp("last_seen"),
 });
 
 export const session = pgTable(
@@ -154,4 +156,6 @@ export const message = pgTable("message", {
     createdAt: timestamp("created_at")
         .defaultNow()
         .notNull(),
+    seen: boolean("seen").default(false).notNull(),
+    seenAt: timestamp("seen_at"),
 });

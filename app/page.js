@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { MessageCircle, ShieldCheck, Search, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
 
 export default function HomePage() {
   return (

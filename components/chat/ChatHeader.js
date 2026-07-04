@@ -2,7 +2,8 @@ import { ArrowLeft, Phone, Video, MoreVertical } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
-export default function ChatHeader({ chat, onBack }) {
+export default function ChatHeader({ chat, isTyping, onBack, onlineUsers }) {
+    const isOnline = onlineUsers?.includes(chat?.id);
     return (
         <header className="flex h-16 items-center justify-between border-b bg-card px-4">
             <div className="flex items-center gap-3">
@@ -21,7 +22,18 @@ export default function ChatHeader({ chat, onBack }) {
 
                 <div>
                     <h2 className="font-semibold">{chat?.name || "User"}</h2>
-                    <p className="text-xs text-green-600">Online</p>
+                    <p className={`text-xs ${isOnline ? "text-[#22C55E]" : "text-[#64748B]"}`}>
+                        {isTyping
+                            ? "typing..."
+                            : isOnline
+                                ? "Online"
+                                : chat?.lastSeen
+                                    ? `Last seen ${new Date(chat.lastSeen).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                    })}`
+                                    : "Offline"}
+                    </p>
                 </div>
             </div>
 

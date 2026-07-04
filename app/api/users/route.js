@@ -23,6 +23,7 @@ export async function GET() {
                 name: user.name,
                 email: user.email,
                 image: user.image,
+                lastSeen: user.lastSeen,
             })
             .from(user)
             .where(ne(user.id, session.user.id));

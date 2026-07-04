@@ -1,15 +1,39 @@
 "use client";
 
-import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMessages } from "@/hooks/useMessages";
 import { supabase } from "@/lib/supabase";
+import { useEffect, useRef } from "react";
 
-export default function MessageList({ selectedChat, currentUser }) {
+export default function MessageList({ selectedChat, currentUser, setIsTyping }) {
+    const bottomRef = useRef(null);
     const conversationId = selectedChat?.conversationId;
     const queryClient = useQueryClient();
     const { data: messages = [], isPending } = useMessages(conversationId);
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({
+            behavior: "smooth",
+        });
+    }, [messages]);
+    useEffect(() => {
+        if (!conversationId) return;
+
+        const channel = supabase
+            .channel(`typing-${conversationId}`)
+            .on("broadcast", { event: "typing" }, () => {
+                setIsTyping(true);
+            })
+            .on("broadcast", { event: "stop-typing" }, () => {
+                setIsTyping(false);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+            setIsTyping(false);
+        };
+    }, [conversationId, setIsTyping]);
     useEffect(() => {
         if (!conversationId) return;
         const channel = supabase
@@ -56,11 +80,13 @@ export default function MessageList({ selectedChat, currentUser }) {
             </div>
         );
     }
+
     return (
-        <ScrollArea className="flex-1 bg-[#F8FAFC] p-4">
+        <ScrollArea className="min-h-0 flex-1 bg-[#F8FAFC] p-4">
             <div className="space-y-3">
                 {messages.map((msg) => {
                     const isMe = msg.senderId === currentUser?.id;
+
                     return (
                         <div
                             key={msg.id}
@@ -68,15 +94,27 @@ export default function MessageList({ selectedChat, currentUser }) {
                         >
                             <div
                                 className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${isMe
-                                    ? "bg-[#2563EB] text-white"
+                                    ? "bg-[#3e72e0] text-white"
                                     : "border border-[#E2E8F0] bg-white text-[#0F172A]"
                                     }`}
                             >
-                                {msg.text}
+                                <p>{msg.text}</p>
+
+                                <p
+                                    className={`mt-1 text-[11px] ${isMe ? "text-white/70" : "text-[#94A3B8]"
+                                        }`}
+                                >
+                                    {new Date(msg.createdAt).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                    })}
+                                </p>
                             </div>
                         </div>
                     );
                 })}
+
+                <div ref={bottomRef} />
             </div>
         </ScrollArea>
     );

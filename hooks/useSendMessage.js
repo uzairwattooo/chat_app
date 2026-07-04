@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export function useSendMessage() {
     const queryClient = useQueryClient();
+
     return useMutation({
         mutationFn: async ({ conversationId, text }) => {
             const res = await fetch("/api/messages", {
@@ -9,19 +10,41 @@ export function useSendMessage() {
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                    conversationId,
-                    text,
-                }),
+                body: JSON.stringify({ conversationId, text }),
             });
-            if (!res.ok) {
-                throw new Error("Failed to send message");
-            }
+
+            if (!res.ok) throw new Error("Failed to send message");
             return res.json();
         },
-        onSuccess: (_, variables) => {
-            queryClient.invalidateQueries({
-                queryKey: ["messages", variables.conversationId],
+
+        onSuccess: (data, variables) => {
+            const newMessage = data.message;
+
+            queryClient.setQueryData(
+                ["messages", variables.conversationId],
+                (old = []) => {
+                    const exists = old.some((msg) => msg.id === newMessage.id);
+                    if (exists) return old;
+                    return [...old, newMessage];
+                }
+            );
+
+            queryClient.setQueryData(["conversations"], (old = []) => {
+                const updated = old.map((item) => {
+                    if (item.conversationId !== variables.conversationId) return item;
+
+                    return {
+                        ...item,
+                        lastMessage: newMessage.text,
+                        lastMessageTime: newMessage.createdAt,
+                    };
+                });
+
+                return updated.sort((a, b) => {
+                    if (!a.lastMessageTime) return 1;
+                    if (!b.lastMessageTime) return -1;
+                    return new Date(b.lastMessageTime) - new Date(a.lastMessageTime);
+                });
             });
         },
     });
