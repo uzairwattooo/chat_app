@@ -115,10 +115,6 @@ export default function DownloadableMedia({
                     "application/octet-stream",
             });
 
-            /*
-             * Cache me response save kar rahe hain.
-             * Refresh ke baad isi cache se media load hogi.
-             */
             const cache = await caches.open(MEDIA_CACHE);
 
             await cache.put(

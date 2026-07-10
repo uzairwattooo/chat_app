@@ -37,19 +37,100 @@ export function useSendMessage() {
             queryClient.setQueryData(
                 ["messages", variables.conversationId],
                 (old = []) => {
-                    const exists = old.some((msg) => msg.id === newMessage.id);
-                    if (exists) return old;
-                    return [...old, newMessage];
+                    const exists = old.some(
+                        (msg) => msg.id === newMessage.id
+                    );
+
+                    if (exists) {
+                        return old.map((msg) =>
+                            msg.id === newMessage.id
+                                ? {
+                                    ...msg,
+                                    ...newMessage,
+                                    type: newMessage.type || variables.type || "text",
+                                    fileUrl:
+                                        newMessage.fileUrl ||
+                                        newMessage.file_url ||
+                                        variables.fileUrl ||
+                                        null,
+                                    fileName:
+                                        newMessage.fileName ||
+                                        newMessage.file_name ||
+                                        variables.fileName ||
+                                        null,
+                                    mimeType:
+                                        newMessage.mimeType ||
+                                        newMessage.mime_type ||
+                                        variables.mimeType ||
+                                        null,
+                                    fileSize:
+                                        newMessage.fileSize ??
+                                        newMessage.file_size ??
+                                        variables.fileSize ??
+                                        null,
+                                    replyToId:
+                                        newMessage.replyToId ||
+                                        newMessage.reply_to_id ||
+                                        variables.replyToId ||
+                                        null,
+                                }
+                                : msg
+                        );
+                    }
+
+                    return [
+                        ...old,
+                        {
+                            ...newMessage,
+                            type: newMessage.type || variables.type || "text",
+                            fileUrl:
+                                newMessage.fileUrl ||
+                                newMessage.file_url ||
+                                variables.fileUrl ||
+                                null,
+                            fileName:
+                                newMessage.fileName ||
+                                newMessage.file_name ||
+                                variables.fileName ||
+                                null,
+                            mimeType:
+                                newMessage.mimeType ||
+                                newMessage.mime_type ||
+                                variables.mimeType ||
+                                null,
+                            fileSize:
+                                newMessage.fileSize ??
+                                newMessage.file_size ??
+                                variables.fileSize ??
+                                null,
+                            replyToId:
+                                newMessage.replyToId ||
+                                newMessage.reply_to_id ||
+                                variables.replyToId ||
+                                null,
+                        },
+                    ];
                 }
             );
 
             queryClient.setQueryData(["conversations"], (old = []) => {
                 const updated = old.map((item) => {
-                    if (item.conversationId !== variables.conversationId) return item;
+                    if (item.conversationId !== variables.conversationId) {
+                        return item;
+                    }
+
+                    let lastMessage = newMessage.text;
+
+                    if (variables.type === "image") lastMessage = "📷 Image";
+                    if (variables.type === "video") lastMessage = "🎥 Video";
+                    if (variables.type === "audio") lastMessage = "🎤 Audio";
+                    if (variables.type === "file") {
+                        lastMessage = `📄 ${variables.fileName || "Document"}`;
+                    }
 
                     return {
                         ...item,
-                        lastMessage: newMessage.text,
+                        lastMessage,
                         lastMessageTime: newMessage.createdAt,
                     };
                 });
@@ -57,7 +138,11 @@ export function useSendMessage() {
                 return updated.sort((a, b) => {
                     if (!a.lastMessageTime) return 1;
                     if (!b.lastMessageTime) return -1;
-                    return new Date(b.lastMessageTime) - new Date(a.lastMessageTime);
+
+                    return (
+                        new Date(b.lastMessageTime) -
+                        new Date(a.lastMessageTime)
+                    );
                 });
             });
         },

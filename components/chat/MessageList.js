@@ -97,8 +97,11 @@ export default function MessageList({
                                 >
                                     {!isDeleted && (
                                         <div
-                                            className={`absolute top-1 opacity-0 transition group-hover:opacity-100 ${isMe ? "-left-9" : "-right-9"
-                                                }`}
+
+                                            className={`absolute top-1 transition
+    opacity-100 md:opacity-0 md:group-hover:opacity-100
+    ${isMe ? "-left-9" : "-right-9"}
+  `}
                                         >
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
