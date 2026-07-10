@@ -8,7 +8,9 @@ export function useSendMessage() {
             fileUrl = null,
             fileName = null,
             mimeType = null,
-            fileSize = null, }) => {
+            fileSize = null,
+            replyToId = null,
+        }) => {
             const res = await fetch("/api/messages", {
                 method: "POST",
                 headers: {
@@ -19,7 +21,9 @@ export function useSendMessage() {
                     fileUrl,
                     fileName,
                     mimeType,
-                    fileSize
+                    fileSize,
+                    replyToId,
+
                 }),
             });
 

@@ -24,11 +24,15 @@ export function useSeenMessages() {
             queryClient.setQueryData(
                 ["messages", variables.conversationId],
                 (old = []) =>
-                    old.map((msg) => ({
-                        ...msg,
-                        seen: true,
-                        seenAt: msg.seenAt || new Date().toISOString(),
-                    }))
+                    old.map((msg) =>
+                        msg.senderId !== variables.currentUserId
+                            ? {
+                                ...msg,
+                                seen: true,
+                                seenAt: msg.seenAt || new Date().toISOString(),
+                            }
+                            : msg
+                    )
             );
         },
     });

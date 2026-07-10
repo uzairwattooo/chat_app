@@ -15,11 +15,13 @@ export async function DELETE(req, { params }) {
         }
 
         const { id } = await params;
+        const now = new Date();
 
         const updated = await db
             .update(conversationMember)
             .set({
-                clearedAt: new Date(),
+                deletedAt: now,
+                clearedAt: now,
             })
             .where(
                 and(
@@ -35,10 +37,10 @@ export async function DELETE(req, { params }) {
 
         return Response.json({ success: true });
     } catch (error) {
-        console.log("CLEAR_CHAT_ERROR:", error);
+        console.log("DELETE_CHAT_ERROR:", error);
 
         return Response.json(
-            { error: "Failed to clear chat" },
+            { error: "Failed to delete chat" },
             { status: 500 }
         );
     }

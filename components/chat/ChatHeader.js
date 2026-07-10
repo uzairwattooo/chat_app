@@ -2,6 +2,7 @@ import { ArrowLeft, Phone, Video, MoreVertical } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useClearChat } from "@/hooks/useClearChat";
+import { useDeleteChat } from "@/hooks/useDeleteChat";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -9,9 +10,10 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export default function ChatHeader({ chat, isTyping, onBack, onlineUsers }) {
+export default function ChatHeader({ chat, isTyping, onBack, onlineUsers, onDeleteChat, }) {
     const clearChat = useClearChat();
     const isOnline = onlineUsers?.includes(chat?.id);
+    const deleteChat = useDeleteChat();
 
     return (
         <header className="flex h-16 items-center justify-between border-b bg-card px-4">
@@ -27,16 +29,18 @@ export default function ChatHeader({ chat, isTyping, onBack, onlineUsers }) {
                 <div>
                     <h2 className="font-semibold">{chat?.name || "User"}</h2>
                     <p className={`text-xs ${isOnline ? "text-[#22C55E]" : "text-[#64748B]"}`}>
-                        {isTyping
-                            ? "typing..."
-                            : isOnline
-                                ? "Online"
-                                : chat?.lastSeen
-                                    ? `Last seen ${new Date(chat.lastSeen).toLocaleTimeString([], {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                    })}`
-                                    : "Offline"}
+                        {isTyping === "recording"
+                            ? "recording audio..."
+                            : isTyping === "typing"
+                                ? "typing..."
+                                : isOnline
+                                    ? "Online"
+                                    : chat?.lastSeen
+                                        ? `Last seen ${new Date(chat.lastSeen).toLocaleTimeString([], {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                        })}`
+                                        : "Offline"}
                     </p>
                 </div>
             </div>
@@ -63,6 +67,18 @@ export default function ChatHeader({ chat, isTyping, onBack, onlineUsers }) {
                             onClick={() => clearChat.mutate(chat.conversationId)}
                         >
                             Clear Chat
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            className="text-red-600"
+                            onClick={() => {
+                                deleteChat.mutate(chat.conversationId, {
+                                    onSuccess: () => {
+                                        onDeleteChat?.();
+                                    },
+                                });
+                            }}
+                        >
+                            Delete Chat
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

@@ -1,23 +1,275 @@
 "use client";
 
-import { Image, Send, Smile } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSendMessage } from "@/hooks/useSendMessage";
 import { useEffect, useState, useRef } from "react";
-import { supabase } from "@/lib/supabase";
-import { X } from "lucide-react";
+
+import { Image, X, Send, Smile, Mic, Square, Trash2, } from "lucide-react";
 import { useEditMessage } from "@/hooks/useEditMessage";
 import EmojiPicker from "emoji-picker-react";
+import { toast } from "sonner";
+import { uploadWithProgress } from "@/lib/uploadWithProgress";
 
 export default function MessageInput({ selectedChat, editingMessage,
-    setEditingMessage, }) {
+    setEditingMessage, replyingTo,
+    setReplyingTo, activityChannelRef,
+}) {
     const [showEmoji, setShowEmoji] = useState(false);
-    const emojiRef = useRef(null);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState("");
+    const [caption, setCaption] = useState("");
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [recordedAudio, setRecordedAudio] = useState(null);
     const [text, setText] = useState("");
+
+    const mediaRecorderRef = useRef(null);
+    const audioChunksRef = useRef([]);
+    const recordingTimerRef = useRef(null);
+    const emojiRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const sendMutation = useSendMessage();
     const editMutation = useEditMessage();
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+            });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            audioChunksRef.current = [];
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunksRef.current, {
+                    type: mediaRecorder.mimeType || "audio/webm",
+                });
+                const audioFile = new File(
+                    [audioBlob],
+                    `voice-${Date.now()}.webm`,
+                    {
+                        type: audioBlob.type,
+                    }
+                );
+                setRecordedAudio({
+                    file: audioFile,
+                    url: URL.createObjectURL(audioBlob),
+                });
+
+                stream.getTracks().forEach((track) => track.stop());
+            };
+
+            mediaRecorder.start();
+            activityChannelRef.current?.send({
+                type: "broadcast",
+                event: "recording",
+                payload: {
+                    conversationId: selectedChat.conversationId,
+                },
+            });
+
+            setIsRecording(true);
+            setRecordingTime(0);
+
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingTime((previous) => previous + 1);
+            }, 1000);
+        } catch (error) {
+            console.error("RECORDING_ERROR:", error);
+            toast.error("Microphone permission is required");
+        }
+    };
+
+    const stopRecording = () => {
+        if (
+            mediaRecorderRef.current &&
+            mediaRecorderRef.current.state !== "inactive"
+        ) {
+            mediaRecorderRef.current.stop();
+        }
+
+        activityChannelRef.current?.send({
+            type: "broadcast",
+            event: "stop-recording",
+            payload: {
+                conversationId: selectedChat.conversationId,
+            },
+        });
+
+        clearInterval(recordingTimerRef.current);
+        setIsRecording(false);
+    };
+
+    const cancelRecording = () => {
+        if (
+            mediaRecorderRef.current &&
+            mediaRecorderRef.current.state !== "inactive"
+        ) {
+            mediaRecorderRef.current.stop();
+        }
+        activityChannelRef.current?.send({
+            type: "broadcast",
+            event: "stop-recording",
+            payload: {
+                conversationId: selectedChat.conversationId,
+            },
+        });
+        clearInterval(recordingTimerRef.current);
+        if (recordedAudio?.url) {
+            URL.revokeObjectURL(recordedAudio.url);
+        }
+        setIsRecording(false);
+        setRecordingTime(0);
+        setRecordedAudio(null);
+    };
+    const sendVoiceMessage = async () => {
+        if (!recordedAudio?.file || !selectedChat?.conversationId) return;
+
+        try {
+            setIsUploading(true);
+            setUploadProgress(0);
+
+            const filePath = `${crypto.randomUUID()}-voice.webm`;
+
+            const publicUrl = await uploadWithProgress({
+                file: recordedAudio.file,
+                filePath,
+                bucket: "documents",
+                onProgress: setUploadProgress,
+            });
+
+            sendMutation.mutate(
+                {
+                    conversationId: selectedChat.conversationId,
+                    text: "Voice message",
+                    type: "audio",
+                    fileUrl: publicUrl,
+                    fileName: recordedAudio.file.name,
+                    mimeType: recordedAudio.file.type,
+                    fileSize: recordedAudio.file.size,
+                },
+                {
+                    onSuccess: () => {
+                        URL.revokeObjectURL(recordedAudio.url);
+                        setRecordedAudio(null);
+                        setRecordingTime(0);
+                        setUploadProgress(0);
+                        setIsUploading(false);
+                    },
+                    onError: () => {
+                        setIsUploading(false);
+                        toast.error("Voice message send nahi hua");
+                    },
+                }
+            );
+        } catch (error) {
+            setIsUploading(false);
+            toast.error(error.message || "Voice upload failed");
+        }
+    };
+    const formatRecordingTime = (seconds) => {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+
+        return `${String(minutes).padStart(2, "0")}:${String(
+            remainingSeconds
+        ).padStart(2, "0")}`;
+    };
+
+    const handleFileSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setSelectedFile(file);
+        setCaption("");
+        if (
+            file.type.startsWith("image") ||
+            file.type.startsWith("video")
+        ) {
+            setPreviewUrl(URL.createObjectURL(file));
+        } else {
+            setPreviewUrl("");
+        }
+
+        e.target.value = "";
+    };
+    const handleUploadAndSend = async () => {
+        if (!selectedFile || !selectedChat?.conversationId) return;
+
+        if (selectedFile.size > 25 * 1024 * 1024) {
+            toast.error("File size must be less than 25 MB");
+            return;
+        }
+
+        try {
+            setIsUploading(true);
+            setUploadProgress(0);
+
+            const safeName = selectedFile.name.replace(
+                /[^a-zA-Z0-9._-]/g,
+                "_"
+            );
+
+            const filePath = `${crypto.randomUUID()}-${safeName}`;
+
+            const publicUrl = await uploadWithProgress({
+                file: selectedFile,
+                filePath,
+                bucket: "documents",
+                onProgress: setUploadProgress,
+            });
+
+            const messageType = selectedFile.type.startsWith("image")
+                ? "image"
+                : selectedFile.type.startsWith("video")
+                    ? "video"
+                    : selectedFile.type.startsWith("audio")
+                        ? "audio"
+                        : "file";
+
+            sendMutation.mutate(
+                {
+                    conversationId: selectedChat.conversationId,
+                    text: caption.trim() || selectedFile.name,
+                    type: messageType,
+                    fileUrl: publicUrl,
+                    fileName: selectedFile.name,
+                    mimeType: selectedFile.type,
+                    fileSize: selectedFile.size,
+                    replyToId: replyingTo?.id || null,
+                },
+                {
+                    onSuccess: () => {
+                        if (previewUrl) {
+                            URL.revokeObjectURL(previewUrl);
+                        }
+
+                        setSelectedFile(null);
+                        setPreviewUrl("");
+                        setCaption("");
+                        setUploadProgress(0);
+                        setReplyingTo(null);
+                        setIsUploading(false);
+                    },
+
+                    onError: (error) => {
+                        setIsUploading(false);
+                        setUploadProgress(0);
+                        toast.error(error.message || "File message send failed");
+                    },
+                }
+            );
+        } catch (error) {
+            setIsUploading(false);
+            setUploadProgress(0);
+            toast.error(error.message || "Upload failed");
+        }
+    };
     useEffect(() => {
         if (editingMessage) {
             setText(editingMessage.text);
@@ -42,6 +294,7 @@ export default function MessageInput({ selectedChat, editingMessage,
                     onSuccess: () => {
                         setText("");
                         setEditingMessage(null);
+                        setReplyingTo(null);
                     },
                 }
             );
@@ -49,10 +302,18 @@ export default function MessageInput({ selectedChat, editingMessage,
             return;
         }
 
-        sendMutation.mutate({
-            conversationId: selectedChat.conversationId,
-            text,
-        });
+        sendMutation.mutate(
+            {
+                conversationId: selectedChat.conversationId,
+                text,
+                replyToId: replyingTo?.id || null,
+            },
+            {
+                onSuccess: () => {
+                    setReplyingTo(null);
+                },
+            }
+        );
 
         setText("");
     };
@@ -72,139 +333,277 @@ export default function MessageInput({ selectedChat, editingMessage,
             document.removeEventListener("mousedown", handleClick);
     }, []);
     const fileInputRef = useRef(null);
-    const handleFileUpload = async (e) => {
-        const file = e.target.files[0];
-        if (!file || !selectedChat?.conversationId) return;
 
-        const filePath = `${Date.now()}-${file.name}`;
-
-        const { error } = await supabase.storage
-            .from("documents")
-            .upload(filePath, file);
-
-        if (error) {
-            alert(error.message);
-            return;
-        }
-
-        const { data } = supabase.storage
-            .from("documents")
-            .getPublicUrl(filePath);
-
-        const messageType = file.type.startsWith("image")
-            ? "image"
-            : file.type.startsWith("video")
-                ? "video"
-                : file.type.startsWith("audio")
-                    ? "audio"
-                    : "file";
-
-        sendMutation.mutate({
-            conversationId: selectedChat.conversationId,
-            text: file.name,
-            type: messageType,
-            fileUrl: data.publicUrl,
-            fileName: file.name,
-            mimeType: file.type,
-            fileSize: file.size,
-        });
-
-        e.target.value = "";
-    };
     return (
-        <div className="border-t border-[#E2E8F0] bg-white p-4">
-            <div className="flex items-center gap-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowEmoji((prev) => !prev)}
-                >
-                    <Smile className="size-5 text-[#64748B]" />
-                </Button>
-                <input
-                    type="file"
-                    accept="image/*,video/*,audio/*"
-                    hidden
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                />
+        <div className="relative border-t border-[#E2E8F0] bg-white p-4">
+            {editingMessage && (
+                <div className="mb-3 flex items-center justify-between rounded-xl border border-[#DBEAFE] bg-[#EFF6FF] px-4 py-2">
+                    <div>
+                        <p className="text-xs font-medium text-[#2563EB]">
+                            Editing message
+                        </p>
+                        <p className="max-w-[260px] truncate text-sm text-[#64748B]">
+                            {editingMessage.text}
+                        </p>
+                    </div>
 
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => fileInputRef.current.click()}
-                >
-                    <Image className="size-5 text-[#64748B]" />
-                </Button>
-                {editingMessage && (
-                    <div className="mb-3 flex items-center justify-between rounded-xl border border-[#DBEAFE] bg-[#EFF6FF] px-4 py-2">
-                        <div>
-                            <p className="text-xs font-medium text-[#2563EB]">Editing message</p>
-                            <p className="max-w-[260px] truncate text-sm text-[#64748B]">
-                                {editingMessage.text}
-                            </p>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setEditingMessage(null);
+                            setText("");
+                        }}
+                        className="rounded-full p-1 hover:bg-white"
+                    >
+                        <X className="h-4 w-4 text-[#64748B]" />
+                    </button>
+                </div>
+            )}
+
+            {selectedFile && (
+                <div className="mb-3 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            {selectedFile.type.startsWith("image") && previewUrl ? (
+                                <img
+                                    src={previewUrl}
+                                    alt="Preview"
+                                    className="max-h-52 w-full rounded-xl object-contain"
+                                />
+                            ) : selectedFile.type.startsWith("video") && previewUrl ? (
+                                <video
+                                    src={previewUrl}
+                                    controls
+                                    className="max-h-52 w-full rounded-xl"
+                                />
+                            ) : (
+                                <p className="truncate text-sm font-medium text-[#0F172A]">
+                                    {selectedFile.name}
+                                </p>
+                            )}
+
+                            <Input
+                                value={caption}
+                                onChange={(e) => setCaption(e.target.value)}
+                                placeholder="Add a caption..."
+                                className="mt-3"
+                            />
                         </div>
 
                         <button
+                            type="button"
                             onClick={() => {
-                                setEditingMessage(null);
-                                setText("");
+                                if (previewUrl) URL.revokeObjectURL(previewUrl);
+                                setSelectedFile(null);
+                                setPreviewUrl("");
+                                setCaption("");
                             }}
                             className="rounded-full p-1 hover:bg-white"
                         >
                             <X className="h-4 w-4 text-[#64748B]" />
                         </button>
                     </div>
-                )}
-                {showEmoji && (
-                    <div className="realitive bottom-16 left-0 z-50" ref={emojiRef}>
-                        <EmojiPicker
-                            onEmojiClick={(emojiData) => {
-                                setText((prev) => prev + emojiData.emoji);
-                                setShowEmoji(false);
-                            }}
-                        />
-                    </div>
-                )}
-                <Input
-                    value={text}
-                    onChange={(e) => {
-                        setText(e.target.value);
-                        if (!selectedChat?.conversationId) return;
-                        supabase.channel(`typing-${selectedChat.conversationId}`).send({
-                            type: "broadcast",
-                            event: "typing",
-                            payload: {
-                                conversationId: selectedChat.conversationId,
-                            },
-                        });
-                        clearTimeout(typingTimeoutRef.current);
-                        typingTimeoutRef.current = setTimeout(() => {
-                            supabase.channel(`typing-${selectedChat.conversationId}`).send({
+
+                    {isUploading && (
+                        <div className="mt-3">
+                            <div className="mb-1 flex items-center justify-between text-xs text-[#64748B]">
+                                <span>Uploading...</span>
+                                <span>{uploadProgress}%</span>
+                            </div>
+
+                            <div className="h-2 overflow-hidden rounded-full bg-[#E2E8F0]">
+                                <div
+                                    className="h-full rounded-full bg-[#2563EB] transition-[width] duration-200"
+                                    style={{ width: `${uploadProgress}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <Button
+                        type="button"
+                        onClick={handleUploadAndSend}
+                        disabled={isUploading}
+                        className="mt-3 w-full bg-[#2563EB] hover:bg-[#1D4ED8]"
+                    >
+                        {isUploading
+                            ? `Uploading ${uploadProgress}%`
+                            : "Send file"}
+                    </Button>
+                </div>
+            )}
+
+            {showEmoji && (
+                <div
+                    ref={emojiRef}
+                    className="absolute bottom-20 left-4 z-50"
+                >
+                    <EmojiPicker
+                        onEmojiClick={(emojiData) => {
+                            setText((prev) => prev + emojiData.emoji);
+                            setShowEmoji(false);
+                        }}
+                    />
+                </div>
+            )}
+            {isRecording ? (
+                <div className="flex w-full items-center gap-3 rounded-xl bg-red-50 px-4 py-2">
+                    <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
+
+                    <p className="flex-1 text-sm font-medium text-red-600">
+                        Recording {formatRecordingTime(recordingTime)}
+                    </p>
+
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={cancelRecording}
+                    >
+                        <Trash2 className="h-5 w-5 text-red-500" />
+                    </Button>
+
+                    <Button
+                        type="button"
+                        size="icon"
+                        onClick={stopRecording}
+                        className="rounded-full bg-red-500 hover:bg-red-600"
+                    >
+                        <Square className="h-4 w-4 fill-white text-white" />
+                    </Button>
+                </div>
+            ) : recordedAudio ? (
+                <div className="flex w-full items-center gap-3 rounded-xl bg-[#F8FAFC] p-2">
+                    <audio
+                        src={recordedAudio.url}
+                        controls
+                        className="min-w-0 flex-1"
+                    />
+
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={cancelRecording}
+                    >
+                        <Trash2 className="h-5 w-5 text-red-500" />
+                    </Button>
+
+                    <Button
+                        type="button"
+                        size="icon"
+                        disabled={isUploading}
+                        onClick={sendVoiceMessage}
+                        className="rounded-full bg-[#2563EB] hover:bg-[#1D4ED8]"
+                    >
+                        <Send className="h-5 w-5" />
+                    </Button>
+                </div>
+            ) : (
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setShowEmoji((prev) => !prev)}
+                    >
+                        <Smile className="size-5 text-[#64748B]" />
+                    </Button>
+
+                    <input
+                        type="file"
+                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+                        hidden
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                    />
+
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <Image className="size-5 text-[#64748B]" />
+                    </Button>
+                    {replyingTo && (
+                        <div className="mb-3 flex items-center justify-between rounded-xl border-l-4 border-[#2563EB] bg-[#EFF6FF] px-4 py-3">
+                            <div className="min-w-0">
+                                <p className="text-xs font-semibold text-[#2563EB]">
+                                    Replying to message
+                                </p>
+
+                                <p className="max-w-[300px] truncate text-sm text-[#64748B]">
+                                    {replyingTo.type === "text"
+                                        ? replyingTo.text
+                                        : replyingTo.type === "image"
+                                            ? "📷 Image"
+                                            : replyingTo.type === "video"
+                                                ? "🎥 Video"
+                                                : replyingTo.type === "audio"
+                                                    ? "🎤 Voice message"
+                                                    : "📄 Document"}
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setReplyingTo(null)}
+                                className="rounded-full p-1 hover:bg-white"
+                            >
+                                <X className="h-4 w-4 text-[#64748B]" />
+                            </button>
+                        </div>
+                    )}
+                    <Input
+                        value={text}
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            setText(value);
+
+                            activityChannelRef.current?.send({
                                 type: "broadcast",
-                                event: "stop-typing",
+                                event: value.trim() ? "typing" : "stop-typing",
                                 payload: {
                                     conversationId: selectedChat.conversationId,
                                 },
                             });
-                        }, 1000);
-                    }}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter") handleSend();
-                    }}
-                    placeholder="Type a message..."
-                    className="h-11 flex-1 rounded-xl border-[#E2E8F0] bg-[#F8FAFC]"
-                />
 
-                <Button
-                    onClick={handleSend}
-                    disabled={sendMutation.isPending}
-                    size="icon"
-                    className="h-11 w-11 rounded-full bg-[#2563EB] hover:bg-[#1D4ED8]"
-                >
-                    <Send className="size-5" />
-                </Button>
-            </div>
+                            clearTimeout(typingTimeoutRef.current);
+
+                            typingTimeoutRef.current = setTimeout(() => {
+                                activityChannelRef.current?.send({
+                                    type: "broadcast",
+                                    event: "stop-typing",
+                                    payload: {
+                                        conversationId: selectedChat.conversationId,
+                                    },
+                                });
+                            }, 1000);
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSend();
+                        }}
+                        placeholder="Type a message..."
+                        className="h-11 flex-1 rounded-xl border-[#E2E8F0] bg-[#F8FAFC]"
+                    />
+
+                    <Button
+                        onClick={handleSend}
+                        disabled={sendMutation.isPending}
+                        size="icon"
+                        className="h-11 w-11 rounded-full bg-[#2563EB] hover:bg-[#1D4ED8]"
+                    >
+                        <Send className="size-5" />
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={startRecording}
+                    >
+                        <Mic className="h-5 w-5 text-[#64748B]" />
+                    </Button>
+                </div>
+            )}
+
         </div>
     );
 }

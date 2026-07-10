@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import ChatSidebar from "@/components/chat/ChatSidebar";
 import ChatHeader from "@/components/chat/ChatHeader";
 import MessageList from "@/components/chat/MessageList";
@@ -9,14 +8,53 @@ import { useMe } from "@/hooks/useMe";
 import { useOnlineUsers } from "@/hooks/useOnlineUsers";
 import { useRealtime } from "@/hooks/useRealtime";
 import { useConversations } from "@/hooks/useConversations";
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function ChatPage() {
     const [selectedChat, setSelectedChat] = useState(null);
     const [editingMessage, setEditingMessage] = useState(null);
     const { data: currentUser } = useMe();
     const onlineUsers = useOnlineUsers(currentUser);
-    const [isTyping, setIsTyping] = useState(false);
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [activityStatus, setActivityStatus] = useState(false);
+    const activityChannelRef = useRef(null);
     useRealtime(currentUser);
+    useEffect(() => {
+        const conversationId = selectedChat?.conversationId;
+
+        if (!conversationId) {
+            activityChannelRef.current = null;
+            setActivityStatus(false);
+            return;
+        }
+
+        const channel = supabase
+            .channel(`chat-activity-${conversationId}`)
+            .on("broadcast", { event: "typing" }, () => {
+                setActivityStatus("typing");
+            })
+            .on("broadcast", { event: "stop-typing" }, () => {
+                setActivityStatus(false);
+            })
+            .on("broadcast", { event: "recording" }, () => {
+                setActivityStatus("recording");
+            })
+            .on("broadcast", { event: "stop-recording" }, () => {
+                setActivityStatus(false);
+            })
+            .subscribe((status) => {
+                if (status === "SUBSCRIBED") {
+                    activityChannelRef.current = channel;
+                }
+            });
+
+        return () => {
+            activityChannelRef.current = null;
+            setActivityStatus(false);
+            supabase.removeChannel(channel);
+        };
+    }, [selectedChat?.conversationId]);
     useEffect(() => {
         const updateLastSeen = () => {
             navigator.sendBeacon("/api/presence");
@@ -44,6 +82,7 @@ export default function ChatPage() {
             conversationId: activeConversation.conversationId,
         }
         : selectedChat;
+
     return (
         <div className="h-screen overflow-hidden bg-[#F8FAFC]">
             <div className="flex h-full overflow-hidden">
@@ -55,6 +94,8 @@ export default function ChatPage() {
                         selectedChat={selectedChat}
                         setSelectedChat={setSelectedChat}
                         onlineUsers={onlineUsers}
+                        currentUser={currentUser}
+
                     />
                 </div>
 
@@ -66,21 +107,25 @@ export default function ChatPage() {
                         <>
                             <ChatHeader
                                 chat={activeChat}
-                                isTyping={isTyping}
+                                isTyping={activityStatus}
                                 onlineUsers={onlineUsers}
                                 onBack={() => setSelectedChat(null)}
+                                onDeleteChat={() => setSelectedChat(null)}
                             />
                             <MessageList
                                 selectedChat={activeChat}
                                 currentUser={currentUser}
-                                setIsTyping={setIsTyping}
                                 onlineUsers={onlineUsers}
                                 setEditingMessage={setEditingMessage}
+                                setReplyingTo={setReplyingTo}
                             />
                             <MessageInput
                                 selectedChat={activeChat}
                                 editingMessage={editingMessage}
                                 setEditingMessage={setEditingMessage}
+                                replyingTo={replyingTo}
+                                setReplyingTo={setReplyingTo}
+                                activityChannelRef={activityChannelRef}
                             />
                         </>
                     ) : (

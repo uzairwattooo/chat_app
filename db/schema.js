@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index ,integer } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, integer,uniqueIndex } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
     id: text("id").primaryKey(),
@@ -127,6 +127,8 @@ export const conversationMember = pgTable(
             .references(() => user.id, {
                 onDelete: "cascade",
             }),
+        clearedAt: timestamp("cleared_at"),
+        deletedAt: timestamp("deleted_at"),
 
         createdAt: timestamp("created_at")
             .defaultNow()
@@ -165,4 +167,31 @@ export const message = pgTable("message", {
     fileName: text("file_name"),
     mimeType: text("mime_type"),
     fileSize: integer("file_size"),
+    replyToId: text("reply_to_id"),
 });
+export const messageReaction = pgTable(
+    "message_reaction",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => crypto.randomUUID()),
+
+        messageId: text("message_id")
+            .notNull()
+            .references(() => message.id, { onDelete: "cascade" }),
+
+        userId: text("user_id")
+            .notNull()
+            .references(() => user.id, { onDelete: "cascade" }),
+
+        emoji: text("emoji").notNull(),
+
+        createdAt: timestamp("created_at").defaultNow().notNull(),
+    },
+    (table) => [
+        uniqueIndex("message_reaction_user_unique").on(
+            table.messageId,
+            table.userId
+        ),
+    ]
+);

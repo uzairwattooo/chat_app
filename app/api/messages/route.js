@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { message, conversationMember } from "@/db/schema";
+import { message, conversationMember, messageReaction } from "@/db/schema";
 import { headers } from "next/headers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 
 export async function GET(req) {
     try {
@@ -11,7 +11,10 @@ export async function GET(req) {
         });
 
         if (!session?.user) {
-            return Response.json({ error: "Unauthorized" }, { status: 401 });
+            return Response.json(
+                { error: "Unauthorized" },
+                { status: 401 }
+            );
         }
 
         const { searchParams } = new URL(req.url);
@@ -24,21 +27,45 @@ export async function GET(req) {
             );
         }
 
-        const isMember = await db
-            .select()
+        const member = await db
+            .select({
+                clearedAt: conversationMember.clearedAt,
+                deletedAt: conversationMember.deletedAt,
+            })
             .from(conversationMember)
             .where(
                 and(
-                    eq(conversationMember.conversationId, conversationId),
-                    eq(conversationMember.userId, session.user.id)
+                    eq(
+                        conversationMember.conversationId,
+                        conversationId
+                    ),
+                    eq(
+                        conversationMember.userId,
+                        session.user.id
+                    )
                 )
             )
             .limit(1);
 
-        if (isMember.length === 0) {
-            return Response.json({ error: "Forbidden" }, { status: 403 });
+        if (member.length === 0) {
+            return Response.json(
+                { error: "Forbidden" },
+                { status: 403 }
+            );
         }
 
+        if (member[0].deletedAt) {
+            return Response.json({ messages: [] });
+        }
+
+        const clearedAt = member[0].clearedAt;
+
+        const messageCondition = clearedAt
+            ? and(
+                eq(message.conversationId, conversationId),
+                gt(message.createdAt, clearedAt)
+            )
+            : eq(message.conversationId, conversationId);
 
         const messages = await db
             .select({
@@ -49,20 +76,49 @@ export async function GET(req) {
                 seen: message.seen,
                 seenAt: message.seenAt,
                 createdAt: message.createdAt,
+                editedAt: message.editedAt,
+                deletedAt: message.deletedAt,
                 type: message.type,
                 fileUrl: message.fileUrl,
                 fileName: message.fileName,
                 mimeType: message.mimeType,
                 fileSize: message.fileSize,
+                replyToId: message.replyToId,
             })
             .from(message)
-            .where(eq(message.conversationId, conversationId))
-            .orderBy(message.createdAt)
+            .where(messageCondition)
+            .orderBy(message.createdAt);
 
-        return Response.json({ messages });
+        const messagesWithReactions = await Promise.all(
+            messages.map(async (item) => {
+                const reactions = await db
+                    .select({
+                        id: messageReaction.id,
+                        userId: messageReaction.userId,
+                        emoji: messageReaction.emoji,
+                    })
+                    .from(messageReaction)
+                    .where(
+                        eq(messageReaction.messageId, item.id)
+                    );
+
+                return {
+                    ...item,
+                    reactions,
+                };
+            })
+        );
+
+        return Response.json({
+            messages: messagesWithReactions,
+        });
     } catch (error) {
         console.log("GET_MESSAGES_ERROR:", error);
-        return Response.json({ error: "Failed to fetch messages" }, { status: 500 });
+
+        return Response.json(
+            { error: "Failed to fetch messages" },
+            { status: 500 }
+        );
     }
 }
 
@@ -83,7 +139,9 @@ export async function POST(req) {
             fileUrl,
             fileName,
             mimeType,
-            fileSize, } = await req.json();
+            fileSize,
+            replyToId = null,
+        } = await req.json();
 
         if (!conversationId) {
             return Response.json(
@@ -98,7 +156,6 @@ export async function POST(req) {
                 { status: 400 }
             );
         }
-
         const isMember = await db
             .select()
             .from(conversationMember)
@@ -114,6 +171,18 @@ export async function POST(req) {
             return Response.json({ error: "Forbidden" }, { status: 403 });
         }
 
+        await db
+            .update(conversationMember)
+            .set({
+                deletedAt: null,
+            })
+            .where(
+                and(
+                    eq(conversationMember.conversationId, conversationId),
+                    eq(conversationMember.userId, session.user.id)
+                )
+            );
+
         const newMessage = await db
             .insert(message)
             .values({
@@ -126,6 +195,8 @@ export async function POST(req) {
                 fileName,
                 mimeType,
                 fileSize,
+                replyToId,
+
             })
             .returning();
 
