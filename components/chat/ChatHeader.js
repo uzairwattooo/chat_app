@@ -30,7 +30,13 @@ export default function ChatHeader({ chat, isTyping, onBack, onlineUsers, onDele
 
                 <div className="relative shrink-0">
                     <Avatar className="h-11 w-11 ring-2 ring-white shadow-md sm:h-12 sm:w-12">
-                        <AvatarImage src={chat?.image || ""} alt={chat?.name || "User"} className="object-cover" />
+                        {chat?.image ? (
+                            <AvatarImage
+                                src={chat.image || undefined}
+                                alt={chat?.name || "User"}
+                                className="object-cover"
+                            />
+                        ) : null} 
                         <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-cyan-500 font-semibold text-white">
                             {chat?.name?.charAt(0)?.toUpperCase() || "U"}
                         </AvatarFallback>

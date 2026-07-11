@@ -20,6 +20,8 @@ export default function ChatSidebar({ selectedChat, setSelectedChat, onlineUsers
     const filteredConversations = useMemo(() => {
         return conversations.filter((conversation) =>
             conversation.user.name.toLowerCase().includes(search.toLowerCase())
+
+
         );
     }, [conversations, search]);
 

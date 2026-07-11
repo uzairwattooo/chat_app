@@ -35,6 +35,20 @@ export function useSeenMessages() {
                             : msg
                     )
             );
-        },
+                queryClient.setQueryData(
+                    ["conversations"],
+                    (old = []) =>
+                        old.map((conversation) =>
+                            conversation.conversationId ===
+                                variables.conversationId
+                                ? {
+                                    ...conversation,
+                                    unreadCount: 0,
+                                }
+                                : conversation
+                        )
+                );
+            },
+        
     });
 }

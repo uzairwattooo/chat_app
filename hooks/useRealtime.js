@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { getMessageTimestamp } from "@/lib/date";
+import { toast } from "sonner";
 
 function normalizeRealtimeDate(value) {
     if (!value) return new Date().toISOString();
@@ -57,7 +58,8 @@ function normalizeMessage(raw) {
         failed: false,
     };
 }
-export function useRealtime(currentUser) {
+export function useRealtime(currentUser, activeConversationId,
+    onOpenConversation) {
     const queryClient = useQueryClient();
 
     useEffect(() => {
@@ -105,7 +107,144 @@ export function useRealtime(currentUser) {
                             );
                         }
                     );
+                    queryClient.setQueryData(
+                        ["conversations"],
+                        (old = []) =>
+                            old.map((conversation) => {
+                                if (
+                                    conversation.conversationId !==
+                                    realtimeMessage.conversationId
+                                ) {
+                                    return conversation;
+                                }
 
+                                const isMyMessage =
+                                    realtimeMessage.senderId ===
+                                    currentUser.id;
+
+                                const isOpenChat =
+                                    realtimeMessage.conversationId ===
+                                    activeConversationId;
+
+                                return {
+                                    ...conversation,
+
+                                    lastMessage:
+                                        realtimeMessage.type === "image"
+                                            ? "📷 Image"
+                                            : realtimeMessage.type === "video"
+                                                ? "🎥 Video"
+                                                : realtimeMessage.type === "audio"
+                                                    ? "🎤 Voice message"
+                                                    : realtimeMessage.type === "file"
+                                                        ? `📄 ${realtimeMessage.fileName ||
+                                                        "Document"
+                                                        }`
+                                                        : realtimeMessage.text,
+
+                                    lastMessageTime:
+                                        realtimeMessage.createdAt,
+
+                                    unreadCount:
+                                        !isMyMessage && !isOpenChat
+                                            ? (conversation.unreadCount || 0) + 1
+                                            : conversation.unreadCount || 0,
+                                };
+                            })
+                    );
+                    const isMyMessage =
+                        realtimeMessage.senderId === currentUser.id;
+
+                    const isCurrentChat =
+                        realtimeMessage.conversationId === activeConversationId;
+
+                    if (!isMyMessage && !isCurrentChat) {
+                        const conversations =
+                            queryClient.getQueryData(["conversations"]) || [];
+
+                        const conversation = conversations.find(
+                            (item) =>
+                                item.conversationId ===
+                                realtimeMessage.conversationId
+                        );
+
+                        const senderName =
+                            conversation?.user?.name || "New message";
+
+                        const senderImage =
+                            conversation?.user?.image || "";
+
+                        let notificationText = realtimeMessage.text;
+
+                        if (realtimeMessage.type === "image") {
+                            notificationText = "📷 Sent an image";
+                        }
+
+                        if (realtimeMessage.type === "video") {
+                            notificationText = "🎥 Sent a video";
+                        }
+
+                        if (realtimeMessage.type === "audio") {
+                            notificationText = "🎤 Sent a voice message";
+                        }
+
+                        if (realtimeMessage.type === "file") {
+                            notificationText = `📄 ${realtimeMessage.fileName || "Sent a document"
+                                }`;
+                        }
+
+                        toast.custom(
+                            (toastId) => (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        toast.dismiss(toastId);
+
+                                        if (conversation) {
+                                            onOpenConversation?.({
+                                                id: conversation.user.id,
+                                                name: conversation.user.name,
+                                                email: conversation.user.email,
+                                                image: conversation.user.image,
+                                                lastSeen: conversation.user.lastSeen,
+                                                conversationId:
+                                                    conversation.conversationId,
+                                            });
+                                        }
+                                    }}
+                                    className="flex w-[340px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-xl"
+                                >
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-indigo-100 font-semibold text-indigo-600">
+                                        {senderImage ? (
+                                            <img
+                                                src={senderImage}
+                                                alt={senderName}
+                                                className="h-full w-full object-cover"
+                                            />
+                                        ) : (
+                                            senderName.charAt(0).toUpperCase()
+                                        )}
+                                    </div>
+
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-semibold text-slate-900">
+                                            {senderName}
+                                        </p>
+
+                                        <p className="truncate text-sm text-slate-500">
+                                            {notificationText}
+                                        </p>
+                                    </div>
+
+                                    <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
+                                </button>
+                            ),
+                            {
+                                duration: 5000,
+                                position: "top-right",
+                            }
+                        );
+                    }
                     queryClient.invalidateQueries({ queryKey: ["conversations"] });
                 }
             )
@@ -129,6 +268,7 @@ export function useRealtime(currentUser) {
                                     : msg
                             )
                     );
+
                 }
             )
             .on(
@@ -235,5 +375,10 @@ export function useRealtime(currentUser) {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [currentUser?.id, queryClient]);
+    }, [
+        currentUser?.id,
+        activeConversationId,
+        onOpenConversation,
+        queryClient,
+    ]);
 }

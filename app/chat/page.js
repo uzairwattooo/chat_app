@@ -19,7 +19,11 @@ export default function ChatPage() {
     const [replyingTo, setReplyingTo] = useState(null);
     const [activityStatus, setActivityStatus] = useState(false);
     const activityChannelRef = useRef(null);
-    useRealtime(currentUser);
+    useRealtime(
+    currentUser,
+    selectedChat?.conversationId,
+    setSelectedChat
+);
     useEffect(() => {
         const conversationId = selectedChat?.conversationId;
 

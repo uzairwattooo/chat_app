@@ -15,6 +15,7 @@ import {
     inArray,
     isNull,
     ne,
+    sql,
 } from "drizzle-orm";
 
 export async function POST(req) {
@@ -192,53 +193,71 @@ export async function GET() {
 
         const rows = await Promise.all(
             otherMembers.map(async (member) => {
-                const clearedAt = clearedAtMap.get(
-                    member.conversationId
-                );
-
-                const lastMessageCondition = clearedAt
-                    ? and(
-                        eq(
-                            message.conversationId,
-                            member.conversationId
-                        ),
-                        gt(message.createdAt, clearedAt)
-                    )
-                    : eq(
-                        message.conversationId,
-                        member.conversationId
-                    );
-
                 const last = await db
                     .select({
+                        id: message.id,
                         text: message.text,
                         type: message.type,
                         fileName: message.fileName,
                         createdAt: message.createdAt,
                     })
                     .from(message)
-                    .where(lastMessageCondition)
+                    .where(
+                        eq(
+                            message.conversationId,
+                            member.conversationId
+                        )
+                    )
                     .orderBy(desc(message.createdAt))
                     .limit(1);
 
-                let lastMessage = "No messages yet";
+                const unreadResult = await db
+                    .select({
+                        count: sql`count(*)`,
+                    })
+                    .from(message)
+                    .where(
+                        and(
+                            eq(
+                                message.conversationId,
+                                member.conversationId
+                            ),
+                            ne(
+                                message.senderId,
+                                session.user.id
+                            ),
+                            eq(message.seen, false)
+                        )
+                    );
 
-                if (last[0]) {
-                    if (last[0].type === "image") {
-                        lastMessage = "📷 Image";
-                    } else if (last[0].type === "video") {
-                        lastMessage = "🎥 Video";
-                    } else if (last[0].type === "audio") {
-                        lastMessage = "🎵 Audio";
-                    } else if (last[0].type === "file") {
-                        lastMessage = `📄 ${last[0].fileName || "Document"}`;
-                    } else {
-                        lastMessage = last[0].text;
-                    }
+                const unreadCount = Number(
+                    unreadResult[0]?.count || 0
+                );
+
+                let lastMessage =
+                    last[0]?.text || "No messages yet";
+
+                if (last[0]?.type === "image") {
+                    lastMessage = "📷 Image";
+                }
+
+                if (last[0]?.type === "video") {
+                    lastMessage = "🎥 Video";
+                }
+
+                if (last[0]?.type === "audio") {
+                    lastMessage = "🎤 Voice message";
+                }
+
+                if (last[0]?.type === "file") {
+                    lastMessage = `📄 ${last[0]?.fileName || "Document"
+                        }`;
                 }
 
                 return {
-                    conversationId: member.conversationId,
+                    conversationId:
+                        member.conversationId,
+
                     user: {
                         id: member.userId,
                         name: member.name,
@@ -246,8 +265,15 @@ export async function GET() {
                         image: member.image,
                         lastSeen: member.lastSeen,
                     },
+
                     lastMessage,
-                    lastMessageTime: last[0]?.createdAt || null,
+                    lastMessageType:
+                        last[0]?.type || "text",
+
+                    lastMessageTime:
+                        last[0]?.createdAt || null,
+
+                    unreadCount,
                 };
             })
         );
