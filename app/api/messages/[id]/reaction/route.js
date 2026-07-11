@@ -1,6 +1,10 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { messageReaction } from "@/db/schema";
+import {
+    message,
+    messageReaction,
+    conversationMember,
+} from "@/db/schema";
 import { headers } from "next/headers";
 import { and, eq } from "drizzle-orm";
 
@@ -17,11 +21,45 @@ export async function POST(req, { params }) {
         const { id: messageId } = await params;
         const { emoji } = await req.json();
 
-        if (!emoji) {
+        if (!emoji?.trim()) {
             return Response.json(
                 { error: "Emoji is required" },
                 { status: 400 }
             );
+        }
+
+        const targetMessage = await db
+            .select({
+                id: message.id,
+                conversationId: message.conversationId,
+            })
+            .from(message)
+            .where(eq(message.id, messageId))
+            .limit(1);
+
+        if (targetMessage.length === 0) {
+            return Response.json(
+                { error: "Message not found" },
+                { status: 404 }
+            );
+        }
+
+        const membership = await db
+            .select({ id: conversationMember.id })
+            .from(conversationMember)
+            .where(
+                and(
+                    eq(
+                        conversationMember.conversationId,
+                        targetMessage[0].conversationId
+                    ),
+                    eq(conversationMember.userId, session.user.id)
+                )
+            )
+            .limit(1);
+
+        if (membership.length === 0) {
+            return Response.json({ error: "Forbidden" }, { status: 403 });
         }
 
         const existing = await db
@@ -35,7 +73,7 @@ export async function POST(req, { params }) {
             )
             .limit(1);
 
-        if (existing.length) {
+        if (existing.length > 0) {
             if (existing[0].emoji === emoji) {
                 await db
                     .delete(messageReaction)
@@ -66,7 +104,6 @@ export async function POST(req, { params }) {
         return Response.json({ reaction: created[0] });
     } catch (error) {
         console.log("REACTION_ERROR:", error);
-
         return Response.json(
             { error: "Failed to react" },
             { status: 500 }

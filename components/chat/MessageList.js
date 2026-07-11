@@ -1,28 +1,30 @@
 "use client";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { useMessages } from "@/hooks/useMessages";
-import { useSeenMessages } from "@/hooks/useSeenMessages";
-import { MoreVertical } from "lucide-react";
-import { Download, FileText } from "lucide-react";
-import { useDeleteMessage } from "@/hooks/useDeleteMessage";
 import { useEffect, useRef, useState } from "react";
-import MediaPreviewModal from "./MediaPreviewModal";
-import DownloadableMedia from "./DownloadableMedia";
+import { Download, FileText, MoreVertical } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useMessages } from "@/hooks/useMessages";
+import { useSeenMessages } from "@/hooks/useSeenMessages";
+import { useDeleteMessage } from "@/hooks/useDeleteMessage";
 import { useMessageReaction } from "@/hooks/useMessageReaction";
-
+import MediaPreviewModal from "./MediaPreviewModal";
+import DownloadableMedia from "./DownloadableMedia";
+import {
+    formatMessageTime,
+    getMessageTimestamp,
+} from "@/lib/date";
 export default function MessageList({
     selectedChat,
     currentUser,
     onlineUsers,
     setEditingMessage,
-    setReplyingTo
+    setReplyingTo,
 }) {
     const [previewMedia, setPreviewMedia] = useState(null);
     const bottomRef = useRef(null);
@@ -30,10 +32,9 @@ export default function MessageList({
     const receiverOnline = onlineUsers?.includes(selectedChat?.id);
     const seenMutation = useSeenMessages();
     const deleteMutation = useDeleteMessage();
-
-    const { data: messages = [], isPending } = useMessages(conversationId);
     const reactionMutation = useMessageReaction();
     const reactionOptions = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+    const { data: messages = [], isPending } = useMessages(conversationId);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -46,17 +47,21 @@ export default function MessageList({
             (msg) => msg.senderId !== currentUser.id && !msg.seen
         );
 
-        if (hasUnseenReceivedMessage) {
+        if (hasUnseenReceivedMessage && !seenMutation.isPending) {
             seenMutation.mutate({ conversationId });
         }
-    }, [conversationId, messages, currentUser?.id]);
-    const handleEdit = (msg) => {
-        if (msg.type !== "text") return;
-        if (msg.deletedAt) return;
+    }, [conversationId, messages, currentUser?.id, seenMutation]);
 
+    const handleEdit = (msg) => {
+        if (msg.type !== "text" || msg.deletedAt || msg.sending) return;
         setEditingMessage(msg);
     };
-
+const sortedMessages = [...messages].sort((a, b) => {
+    return (
+        getMessageTimestamp(a.createdAt || a.created_at) -
+        getMessageTimestamp(b.createdAt || b.created_at)
+    );
+});
     if (!selectedChat) {
         return (
             <div className="flex flex-1 items-center justify-center text-[#64748B]">
@@ -76,10 +81,10 @@ export default function MessageList({
     return (
         <>
             <ScrollArea className="min-h-0 flex-1 bg-[#F8FAFC] p-4">
-                <div className="space-y-3">
-                    {messages.map((msg) => {
+                <div className="space-y-4">
+                    {sortedMessages.map((msg) => {
                         const isMe = msg.senderId === currentUser?.id;
-                        const isDeleted = !!msg.deletedAt;
+                        const isDeleted = Boolean(msg.deletedAt);
                         const repliedMessage = messages.find(
                             (item) => item.id === msg.replyToId
                         );
@@ -95,7 +100,24 @@ export default function MessageList({
                                         : "border border-[#E2E8F0] bg-white text-[#0F172A]"
                                         } ${isDeleted ? "opacity-80 italic" : ""}`}
                                 >
-                                    {!isDeleted && (
+                                    {msg.uploading && (
+                                        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-black/55">
+                                            <div className="w-[75%]">
+                                                <div className="mb-1 flex justify-between text-xs text-white">
+                                                    <span>Sending...</span>
+                                                    <span>{msg.uploadProgress || 0}%</span>
+                                                </div>
+                                                <div className="h-2 overflow-hidden rounded-full bg-white/30">
+                                                    <div
+                                                        className="h-full rounded-full bg-white transition-[width] duration-150"
+                                                        style={{ width: `${msg.uploadProgress || 0}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!isDeleted && !msg.sending && !msg.uploading && (
                                         <div
 
                                             className={`absolute top-1 transition
@@ -103,9 +125,13 @@ export default function MessageList({
     ${isMe ? "-left-9" : "-right-9"}
   `}
                                         >
+
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <button className="rounded-full p-1 text-[#64748B] hover:bg-[#E2E8F0]">
+                                                    <button
+                                                        type="button"
+                                                        className="flex h-8 w-8 items-center justify-center rounded-full text-[#64748B] hover:bg-[#E2E8F0]"
+                                                    >
                                                         <MoreVertical className="h-4 w-4" />
                                                     </button>
                                                 </DropdownMenuTrigger>
@@ -123,6 +149,7 @@ export default function MessageList({
                                                                     reactionMutation.mutate({
                                                                         messageId: msg.id,
                                                                         conversationId,
+                                                                        currentUserId: currentUser?.id,
                                                                         emoji,
                                                                     })
                                                                 }
@@ -132,6 +159,7 @@ export default function MessageList({
                                                             </button>
                                                         ))}
                                                     </DropdownMenuItem>
+
                                                     <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
                                                         Reply
                                                     </DropdownMenuItem>
@@ -145,9 +173,7 @@ export default function MessageList({
                                                     {isMe && (
                                                         <DropdownMenuItem
                                                             onClick={() =>
-                                                                deleteMutation.mutate({
-                                                                    messageId: msg.id,
-                                                                })
+                                                                deleteMutation.mutate({ messageId: msg.id })
                                                             }
                                                             className="text-red-600"
                                                         >
@@ -158,10 +184,11 @@ export default function MessageList({
                                             </DropdownMenu>
                                         </div>
                                     )}
+
                                     {msg.reactions?.length > 0 && (
                                         <div
                                             className={`absolute -bottom-3 ${isMe ? "right-2" : "left-2"
-                                                } flex rounded-full border bg-white px-2 py-0.5 shadow-sm`}
+                                                } flex rounded-full border bg-white px-2 py-0.5 text-[#0F172A] shadow-sm`}
                                         >
                                             {[...new Set(msg.reactions.map((item) => item.emoji))].map(
                                                 (emoji) => (
@@ -170,7 +197,6 @@ export default function MessageList({
                                                     </span>
                                                 )
                                             )}
-
                                             {msg.reactions.length > 1 && (
                                                 <span className="ml-1 text-xs text-[#64748B]">
                                                     {msg.reactions.length}
@@ -178,6 +204,7 @@ export default function MessageList({
                                             )}
                                         </div>
                                     )}
+
                                     {repliedMessage && !isDeleted && (
                                         <div
                                             className={`mb-2 rounded-lg border-l-4 px-3 py-2 ${isMe
@@ -190,7 +217,6 @@ export default function MessageList({
                                                     ? "You"
                                                     : selectedChat?.name}
                                             </p>
-
                                             <p className="max-w-[220px] truncate text-xs opacity-70">
                                                 {repliedMessage.type === "text"
                                                     ? repliedMessage.text
@@ -204,6 +230,7 @@ export default function MessageList({
                                             </p>
                                         </div>
                                     )}
+
                                     {isDeleted ? (
                                         <p className="italic opacity-70">This message was deleted</p>
                                     ) : ["image", "video", "audio"].includes(msg.type) ? (
@@ -223,24 +250,22 @@ export default function MessageList({
                                             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#EAF1FF] text-[#2563EB]">
                                                 <FileText className="h-5 w-5" />
                                             </div>
-
                                             <div className="min-w-0 flex-1">
                                                 <p className="truncate text-sm font-medium">
                                                     {msg.fileName || "Document"}
                                                 </p>
-
                                                 <p className="text-xs text-[#64748B]">
                                                     {msg.fileSize
                                                         ? `${(msg.fileSize / 1024 / 1024).toFixed(2)} MB`
                                                         : "File"}
                                                 </p>
                                             </div>
-
                                             <Download className="h-4 w-4 text-[#64748B]" />
                                         </a>
                                     ) : (
                                         <p>{msg.text}</p>
                                     )}
+
                                     <div className="mt-1 flex items-center justify-end gap-1">
                                         {msg.editedAt && !isDeleted && (
                                             <span className="text-[11px] opacity-70">edited</span>
@@ -249,22 +274,27 @@ export default function MessageList({
                                             className={`text-[11px] ${isMe ? "text-white/70" : "text-[#94A3B8]"
                                                 }`}
                                         >
-                                            {new Date(msg.createdAt).toLocaleTimeString([], {
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                            })}
+                                            {formatMessageTime(msg.createdAt || msg.created_at)}
                                         </span>
 
                                         {isMe && !isDeleted && (
                                             <span
-                                                className={`text-[12px] font-semibold ${msg.seen
-                                                    ? "text-black"
-                                                    : receiverOnline
-                                                        ? "text-white/80"
-                                                        : "text-white/60"
+                                                className={`text-[12px] font-semibold ${msg.failed
+                                                    ? "text-red-200"
+                                                    : msg.seen
+                                                        ? "text-black"
+                                                        : "text-white/80"
                                                     }`}
                                             >
-                                                {msg.seen ? "✓✓" : receiverOnline ? "✓✓" : "✓"}
+                                                {msg.failed
+                                                    ? "!"
+                                                    : msg.uploading || msg.sending
+                                                        ? "◷"
+                                                        : msg.seen
+                                                            ? "✓✓"
+                                                            : receiverOnline
+                                                                ? "✓✓"
+                                                                : "✓"}
                                             </span>
                                         )}
                                     </div>
@@ -272,13 +302,13 @@ export default function MessageList({
                             </div>
                         );
                     })}
-
                     <div ref={bottomRef} />
                 </div>
             </ScrollArea>
+
             <MediaPreviewModal
                 media={previewMedia}
-                open={!!previewMedia}
+                open={Boolean(previewMedia)}
                 onOpenChange={(open) => {
                     if (!open) setPreviewMedia(null);
                 }}

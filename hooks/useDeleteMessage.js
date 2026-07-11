@@ -9,21 +9,20 @@ export function useDeleteMessage() {
                 method: "DELETE",
             });
 
-            if (!res.ok) throw new Error("Failed to delete message");
-
-            return res.json();
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to delete message");
+            return data;
         },
 
         onSuccess: (data) => {
-            const msg = data.message;
+            const deleted = data.message;
 
-            queryClient.invalidateQueries({
-                queryKey: ["messages", msg.conversationId],
-            });
+            queryClient.setQueryData(
+                ["messages", deleted.conversationId],
+                (old = []) => old.filter((msg) => msg.id !== deleted.id)
+            );
 
-            queryClient.invalidateQueries({
-                queryKey: ["conversations"],
-            });
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
         },
     });
 }

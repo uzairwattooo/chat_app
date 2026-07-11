@@ -7,27 +7,27 @@ export function useEditMessage() {
         mutationFn: async ({ messageId, text }) => {
             const res = await fetch(`/api/messages/${messageId}`, {
                 method: "PATCH",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text }),
             });
 
-            if (!res.ok) throw new Error("Failed to edit message");
-
-            return res.json();
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to edit message");
+            return data;
         },
 
         onSuccess: (data) => {
-            const msg = data.message;
+            const updated = data.message;
 
-            queryClient.invalidateQueries({
-                queryKey: ["messages", msg.conversationId],
-            });
+            queryClient.setQueryData(
+                ["messages", updated.conversationId],
+                (old = []) =>
+                    old.map((msg) =>
+                        msg.id === updated.id ? { ...msg, ...updated } : msg
+                    )
+            );
 
-            queryClient.invalidateQueries({
-                queryKey: ["conversations"],
-            });
+            queryClient.invalidateQueries({ queryKey: ["conversations"] });
         },
     });
 }

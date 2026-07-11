@@ -3,7 +3,60 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { getMessageTimestamp } from "@/lib/date";
 
+function normalizeRealtimeDate(value) {
+    if (!value) return new Date().toISOString();
+
+    const stringValue = String(value);
+
+    if (
+        stringValue.endsWith("Z") ||
+        /[+-]\d{2}:\d{2}$/.test(stringValue)
+    ) {
+        return stringValue;
+    }
+
+    return `${stringValue}Z`;
+}
+
+function normalizeMessage(raw) {
+    return {
+        id: raw.id,
+        conversationId: raw.conversation_id,
+        senderId: raw.sender_id,
+        text: raw.text,
+        type: raw.type || "text",
+        fileUrl: raw.file_url || null,
+        fileName: raw.file_name || null,
+        mimeType: raw.mime_type || null,
+        fileSize: raw.file_size ?? null,
+        replyToId: raw.reply_to_id || null,
+        seen: raw.seen ?? false,
+
+        seenAt: raw.seen_at
+            ? normalizeRealtimeDate(raw.seen_at)
+            : null,
+
+        editedAt: raw.edited_at
+            ? normalizeRealtimeDate(raw.edited_at)
+            : null,
+
+        deletedAt: raw.deleted_at
+            ? normalizeRealtimeDate(raw.deleted_at)
+            : null,
+
+        createdAt: normalizeRealtimeDate(
+            raw.created_at || raw.createdAt
+        ),
+
+        reactions: [],
+        sending: false,
+        uploading: false,
+        uploadProgress: 100,
+        failed: false,
+    };
+}
 export function useRealtime(currentUser) {
     const queryClient = useQueryClient();
 
@@ -11,57 +64,170 @@ export function useRealtime(currentUser) {
         if (!currentUser?.id) return;
 
         const channel = supabase
-            .channel("messages-realtime")
+            .channel(`chat-realtime-${currentUser.id}`)
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "message" },
+                (payload) => {
+                    const realtimeMessage = normalizeMessage(payload.new);
+                    const conversationId = realtimeMessage.conversationId;
+                    if (!conversationId) return;
+
+                    queryClient.setQueryData(
+                        ["messages", conversationId],
+                        (old = []) => {
+                            const existing = old.find(
+                                (msg) => msg.id === realtimeMessage.id
+                            );
+
+                            if (existing) {
+                                return old
+                                    .map((msg) =>
+                                        msg.id === realtimeMessage.id
+                                            ? {
+                                                ...msg,
+                                                ...realtimeMessage,
+                                                reactions: msg.reactions || [],
+                                            }
+                                            : msg
+                                    )
+                                    .sort(
+                                        (a, b) =>
+                                            getMessageTimestamp(a.createdAt) -
+                                            getMessageTimestamp(b.createdAt)
+                                    );
+                            }
+
+                            return [...old, realtimeMessage].sort(
+                                (a, b) =>
+                                    getMessageTimestamp(a.createdAt) -
+                                    getMessageTimestamp(b.createdAt)
+                            );
+                        }
+                    );
+
+                    queryClient.invalidateQueries({ queryKey: ["conversations"] });
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "message" },
+                (payload) => {
+                    const updated = normalizeMessage(payload.new);
+                    if (!updated.conversationId) return;
+
+                    queryClient.setQueryData(
+                        ["messages", updated.conversationId],
+                        (old = []) =>
+                            old.map((msg) =>
+                                msg.id === updated.id
+                                    ? {
+                                        ...msg,
+                                        ...updated,
+                                        reactions: msg.reactions || [],
+                                    }
+                                    : msg
+                            )
+                    );
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "DELETE", schema: "public", table: "message" },
+                (payload) => {
+                    const deletedId = payload.old?.id;
+                    if (!deletedId) return;
+
+                    queryClient.setQueriesData(
+                        { queryKey: ["messages"] },
+                        (old = []) => old.filter((msg) => msg.id !== deletedId)
+                    );
+                    queryClient.invalidateQueries({ queryKey: ["conversations"] });
+                }
+            )
             .on(
                 "postgres_changes",
                 {
-                    event: "*",
+                    event: "INSERT",
                     schema: "public",
-                    table: "message",
+                    table: "message_reaction",
                 },
                 (payload) => {
-                    const row = payload.new || payload.old;
+                    const reaction = {
+                        id: payload.new.id,
+                        messageId: payload.new.message_id,
+                        userId: payload.new.user_id,
+                        emoji: payload.new.emoji,
+                    };
 
-                    if (!row?.conversation_id) return;
+                    queryClient.setQueriesData(
+                        { queryKey: ["messages"] },
+                        (old = []) =>
+                            old.map((msg) => {
+                                if (msg.id !== reaction.messageId) return msg;
+                                const reactions = (msg.reactions || []).filter(
+                                    (item) => item.userId !== reaction.userId
+                                );
+                                return {
+                                    ...msg,
+                                    reactions: [...reactions, reaction],
+                                };
+                            })
+                    );
+                }
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "UPDATE",
+                    schema: "public",
+                    table: "message_reaction",
+                },
+                (payload) => {
+                    const reaction = {
+                        id: payload.new.id,
+                        messageId: payload.new.message_id,
+                        userId: payload.new.user_id,
+                        emoji: payload.new.emoji,
+                    };
 
-                    const conversationId = row.conversation_id;
-
-                    const formattedMessage = payload.new
-                        ? {
-                            id: payload.new.id,
-                            conversationId: payload.new.conversation_id,
-                            senderId: payload.new.sender_id,
-                            text: payload.new.text,
-                            seen: payload.new.seen,
-                            seenAt: payload.new.seen_at,
-                            createdAt: payload.new.created_at,
-                        }
-                        : null;
-
-                    if (payload.eventType === "INSERT") {
-                        queryClient.setQueryData(["messages", conversationId], (old = []) => {
-                            const exists = old.some((msg) => msg.id === formattedMessage.id);
-                            if (exists) return old;
-                            return [...old, formattedMessage];
-                        });
-                    }
-                    if (payload.eventType === "UPDATE") {
-                        queryClient.setQueryData(["messages", conversationId], (old = []) =>
+                    queryClient.setQueriesData(
+                        { queryKey: ["messages"] },
+                        (old = []) =>
                             old.map((msg) =>
-                                msg.id === formattedMessage.id ? formattedMessage : msg
+                                msg.id === reaction.messageId
+                                    ? {
+                                        ...msg,
+                                        reactions: (msg.reactions || []).map((item) =>
+                                            item.id === reaction.id ? reaction : item
+                                        ),
+                                    }
+                                    : msg
                             )
-                        );
-                    }
+                    );
+                }
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "DELETE",
+                    schema: "public",
+                    table: "message_reaction",
+                },
+                (payload) => {
+                    const deletedId = payload.old?.id;
+                    if (!deletedId) return;
 
-                    if (payload.eventType === "DELETE") {
-                        queryClient.setQueryData(["messages", conversationId], (old = []) =>
-                            old.filter((msg) => msg.id !== payload.old.id)
-                        );
-                    }
-
-                    queryClient.invalidateQueries({
-                        queryKey: ["conversations"],
-                    });
+                    queryClient.setQueriesData(
+                        { queryKey: ["messages"] },
+                        (old = []) =>
+                            old.map((msg) => ({
+                                ...msg,
+                                reactions: (msg.reactions || []).filter(
+                                    (reaction) => reaction.id !== deletedId
+                                ),
+                            }))
+                    );
                 }
             )
             .subscribe();

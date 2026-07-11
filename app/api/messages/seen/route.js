@@ -16,7 +16,14 @@ export async function POST(request) {
 
         const { conversationId } = await request.json();
 
-        await db
+        if (!conversationId) {
+            return Response.json(
+                { error: "Conversation id is required" },
+                { status: 400 }
+            );
+        }
+
+        const updatedMessages = await db
             .update(message)
             .set({
                 seen: true,
@@ -28,12 +35,15 @@ export async function POST(request) {
                     ne(message.senderId, session.user.id),
                     eq(message.seen, false)
                 )
-            );
+            )
+            .returning({ id: message.id });
 
-        return Response.json({ success: true });
+        return Response.json({
+            success: true,
+            updatedMessageIds: updatedMessages.map((item) => item.id),
+        });
     } catch (error) {
         console.log("SEEN_ERROR:", error);
-
         return Response.json(
             { error: "Failed to update seen status" },
             { status: 500 }

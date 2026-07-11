@@ -7,25 +7,26 @@ export function useSeenMessages() {
         mutationFn: async ({ conversationId }) => {
             const res = await fetch("/api/messages/seen", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ conversationId }),
             });
 
+            const data = await res.json();
             if (!res.ok) {
-                throw new Error("Failed to update seen messages");
+                throw new Error(data.error || "Failed to update seen messages");
             }
-
-            return res.json();
+            return data;
         },
 
-        onSuccess: (_, variables) => {
+        onSuccess: (data, variables) => {
+            const updatedIds = new Set(data.updatedMessageIds || []);
+            if (updatedIds.size === 0) return;
+
             queryClient.setQueryData(
                 ["messages", variables.conversationId],
                 (old = []) =>
                     old.map((msg) =>
-                        msg.senderId !== variables.currentUserId
+                        updatedIds.has(msg.id)
                             ? {
                                 ...msg,
                                 seen: true,

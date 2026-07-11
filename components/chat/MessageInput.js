@@ -4,16 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSendMessage } from "@/hooks/useSendMessage";
 import { useEffect, useState, useRef } from "react";
-
+import { useQueryClient } from "@tanstack/react-query";
 import { Image, X, Send, Smile, Mic, Square, Trash2, } from "lucide-react";
 import { useEditMessage } from "@/hooks/useEditMessage";
 import EmojiPicker from "emoji-picker-react";
 import { toast } from "sonner";
 import { uploadWithProgress } from "@/lib/uploadWithProgress";
 
-export default function MessageInput({ selectedChat, editingMessage,
-    setEditingMessage, replyingTo,
-    setReplyingTo, activityChannelRef,
+export default function MessageInput({ selectedChat,
+    currentUser,
+    editingMessage,
+    setEditingMessage,
+    replyingTo,
+    setReplyingTo,
+    activityChannelRef,
 }) {
     const [showEmoji, setShowEmoji] = useState(false);
     const [selectedFile, setSelectedFile] = useState(null);
@@ -33,6 +37,7 @@ export default function MessageInput({ selectedChat, editingMessage,
     const typingTimeoutRef = useRef(null);
     const sendMutation = useSendMessage();
     const editMutation = useEditMessage();
+    const queryClient = useQueryClient();
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
@@ -131,44 +136,122 @@ export default function MessageInput({ selectedChat, editingMessage,
     const sendVoiceMessage = async () => {
         if (!recordedAudio?.file || !selectedChat?.conversationId) return;
 
+        const conversationId = selectedChat.conversationId;
+        const messageId = crypto.randomUUID();
+        const localUrl = recordedAudio.url;
+        const replyToId = replyingTo?.id || null;
+
+        const optimisticMessage = {
+            id: messageId,
+            conversationId,
+            senderId: currentUser?.id,
+            text: "Voice message",
+            type: "audio",
+            fileUrl: localUrl,
+            fileName: recordedAudio.file.name,
+            mimeType: recordedAudio.file.type,
+            fileSize: recordedAudio.file.size,
+            replyToId,
+            createdAt: new Date().toISOString(),
+            seen: false,
+            seenAt: null,
+            editedAt: null,
+            deletedAt: null,
+            reactions: [],
+            uploading: true,
+            uploadProgress: 0,
+            sending: false,
+            failed: false,
+        };
+
+        queryClient.setQueryData(
+            ["messages", conversationId],
+            (old = []) => [...old, optimisticMessage]
+        );
+
+        setRecordedAudio(null);
+        setReplyingTo(null);
+        setIsUploading(true);
+        setUploadProgress(0);
+
         try {
-            setIsUploading(true);
-            setUploadProgress(0);
-
             const filePath = `${crypto.randomUUID()}-voice.webm`;
-
             const publicUrl = await uploadWithProgress({
                 file: recordedAudio.file,
                 filePath,
                 bucket: "documents",
-                onProgress: setUploadProgress,
+                onProgress: (progress) => {
+                    setUploadProgress(progress);
+                    queryClient.setQueryData(
+                        ["messages", conversationId],
+                        (old = []) =>
+                            old.map((message) =>
+                                message.id === messageId
+                                    ? { ...message, uploadProgress: progress }
+                                    : message
+                            )
+                    );
+                },
             });
 
             sendMutation.mutate(
                 {
-                    conversationId: selectedChat.conversationId,
+                    messageId,
+                    conversationId,
+                    currentUserId: currentUser?.id,
                     text: "Voice message",
                     type: "audio",
                     fileUrl: publicUrl,
                     fileName: recordedAudio.file.name,
                     mimeType: recordedAudio.file.type,
                     fileSize: recordedAudio.file.size,
+                    replyToId,
+                    skipOptimistic: true,
                 },
                 {
                     onSuccess: () => {
-                        URL.revokeObjectURL(recordedAudio.url);
-                        setRecordedAudio(null);
+                        if (localUrl?.startsWith("blob:")) {
+                            URL.revokeObjectURL(localUrl);
+                        }
                         setRecordingTime(0);
                         setUploadProgress(0);
                         setIsUploading(false);
                     },
                     onError: () => {
+                        queryClient.setQueryData(
+                            ["messages", conversationId],
+                            (old = []) =>
+                                old.map((message) =>
+                                    message.id === messageId
+                                        ? {
+                                            ...message,
+                                            uploading: false,
+                                            sending: false,
+                                            failed: true,
+                                        }
+                                        : message
+                                )
+                        );
                         setIsUploading(false);
                         toast.error("Voice message send nahi hua");
                     },
                 }
             );
         } catch (error) {
+            queryClient.setQueryData(
+                ["messages", conversationId],
+                (old = []) =>
+                    old.map((message) =>
+                        message.id === messageId
+                            ? {
+                                ...message,
+                                uploading: false,
+                                sending: false,
+                                failed: true,
+                            }
+                            : message
+                    )
+            );
             setIsUploading(false);
             toast.error(error.message || "Voice upload failed");
         }
@@ -206,65 +289,132 @@ export default function MessageInput({ selectedChat, editingMessage,
             return;
         }
 
+        const file = selectedFile;
+        const conversationId = selectedChat.conversationId;
+        const messageId = crypto.randomUUID();
+        const replyToId = replyingTo?.id || null;
+        const messageType = file.type.startsWith("image")
+            ? "image"
+            : file.type.startsWith("video")
+                ? "video"
+                : file.type.startsWith("audio")
+                    ? "audio"
+                    : "file";
+
+        const localFileUrl = previewUrl || URL.createObjectURL(file);
+        const optimisticMessage = {
+            id: messageId,
+            conversationId,
+            senderId: currentUser?.id,
+            text: caption.trim() || file.name,
+            type: messageType,
+            fileUrl: localFileUrl,
+            fileName: file.name,
+            mimeType: file.type,
+            fileSize: file.size,
+            replyToId,
+            createdAt: new Date().toISOString(),
+            seen: false,
+            seenAt: null,
+            editedAt: null,
+            deletedAt: null,
+            reactions: [],
+            uploading: true,
+            uploadProgress: 0,
+            sending: false,
+            failed: false,
+        };
+
+        queryClient.setQueryData(
+            ["messages", conversationId],
+            (old = []) => [...old, optimisticMessage]
+        );
+
+        setSelectedFile(null);
+        setPreviewUrl("");
+        setCaption("");
+        setReplyingTo(null);
+        setIsUploading(true);
+        setUploadProgress(0);
+
         try {
-            setIsUploading(true);
-            setUploadProgress(0);
-
-            const safeName = selectedFile.name.replace(
-                /[^a-zA-Z0-9._-]/g,
-                "_"
-            );
-
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
             const filePath = `${crypto.randomUUID()}-${safeName}`;
-
             const publicUrl = await uploadWithProgress({
-                file: selectedFile,
+                file,
                 filePath,
                 bucket: "documents",
-                onProgress: setUploadProgress,
+                onProgress: (progress) => {
+                    setUploadProgress(progress);
+                    queryClient.setQueryData(
+                        ["messages", conversationId],
+                        (old = []) =>
+                            old.map((message) =>
+                                message.id === messageId
+                                    ? { ...message, uploadProgress: progress }
+                                    : message
+                            )
+                    );
+                },
             });
-
-            const messageType = selectedFile.type.startsWith("image")
-                ? "image"
-                : selectedFile.type.startsWith("video")
-                    ? "video"
-                    : selectedFile.type.startsWith("audio")
-                        ? "audio"
-                        : "file";
 
             sendMutation.mutate(
                 {
-                    conversationId: selectedChat.conversationId,
-                    text: caption.trim() || selectedFile.name,
+                    messageId,
+                    conversationId,
+                    currentUserId: currentUser?.id,
+                    text: optimisticMessage.text,
                     type: messageType,
                     fileUrl: publicUrl,
-                    fileName: selectedFile.name,
-                    mimeType: selectedFile.type,
-                    fileSize: selectedFile.size,
-                    replyToId: replyingTo?.id || null,
+                    fileName: file.name,
+                    mimeType: file.type,
+                    fileSize: file.size,
+                    replyToId,
+                    skipOptimistic: true,
                 },
                 {
                     onSuccess: () => {
-                        if (previewUrl) {
-                            URL.revokeObjectURL(previewUrl);
+                        if (localFileUrl.startsWith("blob:")) {
+                            URL.revokeObjectURL(localFileUrl);
                         }
-
-                        setSelectedFile(null);
-                        setPreviewUrl("");
-                        setCaption("");
-                        setUploadProgress(0);
-                        setReplyingTo(null);
                         setIsUploading(false);
+                        setUploadProgress(0);
                     },
-
                     onError: (error) => {
+                        queryClient.setQueryData(
+                            ["messages", conversationId],
+                            (old = []) =>
+                                old.map((message) =>
+                                    message.id === messageId
+                                        ? {
+                                            ...message,
+                                            uploading: false,
+                                            sending: false,
+                                            failed: true,
+                                        }
+                                        : message
+                                )
+                        );
                         setIsUploading(false);
-                        setUploadProgress(0);
-                        toast.error(error.message || "File message send failed");
+                        toast.error(error.message || "Message save failed");
                     },
                 }
             );
         } catch (error) {
+            queryClient.setQueryData(
+                ["messages", conversationId],
+                (old = []) =>
+                    old.map((message) =>
+                        message.id === messageId
+                            ? {
+                                ...message,
+                                uploading: false,
+                                sending: false,
+                                failed: true,
+                            }
+                            : message
+                    )
+            );
             setIsUploading(false);
             setUploadProgress(0);
             toast.error(error.message || "Upload failed");
@@ -281,15 +431,13 @@ export default function MessageInput({ selectedChat, editingMessage,
         setText("");
     }, [selectedChat?.conversationId]);
     const handleSend = () => {
-        if (!text.trim()) return;
-        if (!selectedChat?.conversationId) return;
+        if (!text.trim() || !selectedChat?.conversationId) return;
+
+        const messageText = text.trim();
 
         if (editingMessage) {
             editMutation.mutate(
-                {
-                    messageId: editingMessage.id,
-                    text,
-                },
+                { messageId: editingMessage.id, text: messageText },
                 {
                     onSuccess: () => {
                         setText("");
@@ -298,24 +446,25 @@ export default function MessageInput({ selectedChat, editingMessage,
                     },
                 }
             );
-
             return;
         }
 
+        const messageId = crypto.randomUUID();
+        setText("");
+
         sendMutation.mutate(
             {
+                messageId,
                 conversationId: selectedChat.conversationId,
-                text,
+                currentUserId: currentUser?.id,
+                text: messageText,
                 replyToId: replyingTo?.id || null,
             },
             {
-                onSuccess: () => {
-                    setReplyingTo(null);
-                },
+                onSuccess: () => setReplyingTo(null),
+                onError: () => setText(messageText),
             }
         );
-
-        setText("");
     };
     useEffect(() => {
         const handleClick = (e) => {
@@ -579,7 +728,10 @@ export default function MessageInput({ selectedChat, editingMessage,
                             }, 1000);
                         }}
                         onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSend();
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend();
+                            }
                         }}
                         placeholder="Type a message..."
                         className="h-11 flex-1 rounded-xl border-[#E2E8F0] bg-[#F8FAFC]"
@@ -587,7 +739,7 @@ export default function MessageInput({ selectedChat, editingMessage,
 
                     <Button
                         onClick={handleSend}
-                        disabled={sendMutation.isPending}
+                        disabled={!text.trim()}
                         size="icon"
                         className="h-11 w-11 rounded-full bg-[#2563EB] hover:bg-[#1D4ED8]"
                     >

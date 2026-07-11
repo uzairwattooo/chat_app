@@ -121,6 +121,7 @@ export default function ChatPage() {
                             />
                             <MessageInput
                                 selectedChat={activeChat}
+                                currentUser={currentUser}
                                 editingMessage={editingMessage}
                                 setEditingMessage={setEditingMessage}
                                 replyingTo={replyingTo}

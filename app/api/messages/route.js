@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { message, conversationMember, messageReaction } from "@/db/schema";
 import { headers } from "next/headers";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 
 export async function GET(req) {
     try {
@@ -11,10 +11,7 @@ export async function GET(req) {
         });
 
         if (!session?.user) {
-            return Response.json(
-                { error: "Unauthorized" },
-                { status: 401 }
-            );
+            return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const { searchParams } = new URL(req.url);
@@ -35,35 +32,24 @@ export async function GET(req) {
             .from(conversationMember)
             .where(
                 and(
-                    eq(
-                        conversationMember.conversationId,
-                        conversationId
-                    ),
-                    eq(
-                        conversationMember.userId,
-                        session.user.id
-                    )
+                    eq(conversationMember.conversationId, conversationId),
+                    eq(conversationMember.userId, session.user.id)
                 )
             )
             .limit(1);
 
         if (member.length === 0) {
-            return Response.json(
-                { error: "Forbidden" },
-                { status: 403 }
-            );
+            return Response.json({ error: "Forbidden" }, { status: 403 });
         }
 
         if (member[0].deletedAt) {
             return Response.json({ messages: [] });
         }
 
-        const clearedAt = member[0].clearedAt;
-
-        const messageCondition = clearedAt
+        const messageCondition = member[0].clearedAt
             ? and(
                 eq(message.conversationId, conversationId),
-                gt(message.createdAt, clearedAt)
+                gt(message.createdAt, member[0].clearedAt)
             )
             : eq(message.conversationId, conversationId);
 
@@ -89,32 +75,38 @@ export async function GET(req) {
             .where(messageCondition)
             .orderBy(message.createdAt);
 
-        const messagesWithReactions = await Promise.all(
-            messages.map(async (item) => {
-                const reactions = await db
+        const messageIds = messages.map((item) => item.id);
+        const reactions =
+            messageIds.length > 0
+                ? await db
                     .select({
                         id: messageReaction.id,
+                        messageId: messageReaction.messageId,
                         userId: messageReaction.userId,
                         emoji: messageReaction.emoji,
                     })
                     .from(messageReaction)
-                    .where(
-                        eq(messageReaction.messageId, item.id)
-                    );
+                    .where(inArray(messageReaction.messageId, messageIds))
+                : [];
 
-                return {
-                    ...item,
-                    reactions,
-                };
-            })
-        );
+        const reactionsByMessage = reactions.reduce((acc, reaction) => {
+            if (!acc[reaction.messageId]) acc[reaction.messageId] = [];
+            acc[reaction.messageId].push({
+                id: reaction.id,
+                userId: reaction.userId,
+                emoji: reaction.emoji,
+            });
+            return acc;
+        }, {});
 
         return Response.json({
-            messages: messagesWithReactions,
+            messages: messages.map((item) => ({
+                ...item,
+                reactions: reactionsByMessage[item.id] || [],
+            })),
         });
     } catch (error) {
         console.log("GET_MESSAGES_ERROR:", error);
-
         return Response.json(
             { error: "Failed to fetch messages" },
             { status: 500 }
@@ -133,13 +125,14 @@ export async function POST(req) {
         }
 
         const {
+            messageId,
             conversationId,
             text,
             type = "text",
-            fileUrl,
-            fileName,
-            mimeType,
-            fileSize,
+            fileUrl = null,
+            fileName = null,
+            mimeType = null,
+            fileSize = null,
             replyToId = null,
         } = await req.json();
 
@@ -156,8 +149,11 @@ export async function POST(req) {
                 { status: 400 }
             );
         }
-        const isMember = await db
-            .select()
+
+        const member = await db
+            .select({
+                deletedAt: conversationMember.deletedAt,
+            })
             .from(conversationMember)
             .where(
                 and(
@@ -167,26 +163,61 @@ export async function POST(req) {
             )
             .limit(1);
 
-        if (isMember.length === 0) {
+        if (member.length === 0) {
             return Response.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        await db
-            .update(conversationMember)
-            .set({
-                deletedAt: null,
-            })
-            .where(
-                and(
-                    eq(conversationMember.conversationId, conversationId),
-                    eq(conversationMember.userId, session.user.id)
+        if (replyToId) {
+            const repliedMessage = await db
+                .select({ id: message.id })
+                .from(message)
+                .where(
+                    and(
+                        eq(message.id, replyToId),
+                        eq(message.conversationId, conversationId)
+                    )
                 )
-            );
+                .limit(1);
+
+            if (repliedMessage.length === 0) {
+                return Response.json(
+                    { error: "Reply message is invalid" },
+                    { status: 400 }
+                );
+            }
+        }
+
+        if (member[0].deletedAt) {
+            await db
+                .update(conversationMember)
+                .set({ deletedAt: null })
+                .where(
+                    and(
+                        eq(conversationMember.conversationId, conversationId),
+                        eq(conversationMember.userId, session.user.id)
+                    )
+                );
+        }
+
+        const id = messageId || crypto.randomUUID();
+
+        const existing = await db
+            .select()
+            .from(message)
+            .where(eq(message.id, id))
+            .limit(1);
+
+        if (existing.length > 0) {
+            if (existing[0].senderId !== session.user.id) {
+                return Response.json({ error: "Forbidden" }, { status: 403 });
+            }
+            return Response.json({ message: existing[0] });
+        }
 
         const newMessage = await db
             .insert(message)
             .values({
-                id: crypto.randomUUID(),
+                id,
                 conversationId,
                 senderId: session.user.id,
                 text: text?.trim() || "",
@@ -196,13 +227,15 @@ export async function POST(req) {
                 mimeType,
                 fileSize,
                 replyToId,
-
             })
             .returning();
 
         return Response.json({ message: newMessage[0] });
     } catch (error) {
         console.log("SEND_MESSAGE_ERROR:", error);
-        return Response.json({ error: "Failed to send message" }, { status: 500 });
+        return Response.json(
+            { error: "Failed to send message" },
+            { status: 500 }
+        );
     }
 }
