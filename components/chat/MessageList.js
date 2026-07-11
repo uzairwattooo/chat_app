@@ -15,10 +15,7 @@ import { useDeleteMessage } from "@/hooks/useDeleteMessage";
 import { useMessageReaction } from "@/hooks/useMessageReaction";
 import MediaPreviewModal from "./MediaPreviewModal";
 import DownloadableMedia from "./DownloadableMedia";
-import {
-    formatMessageTime,
-    getMessageTimestamp,
-} from "@/lib/date";
+
 export default function MessageList({
     selectedChat,
     currentUser,
@@ -56,12 +53,7 @@ export default function MessageList({
         if (msg.type !== "text" || msg.deletedAt || msg.sending) return;
         setEditingMessage(msg);
     };
-const sortedMessages = [...messages].sort((a, b) => {
-    return (
-        getMessageTimestamp(a.createdAt || a.created_at) -
-        getMessageTimestamp(b.createdAt || b.created_at)
-    );
-});
+
     if (!selectedChat) {
         return (
             <div className="flex flex-1 items-center justify-center text-[#64748B]">
@@ -80,9 +72,9 @@ const sortedMessages = [...messages].sort((a, b) => {
 
     return (
         <>
-            <ScrollArea className="min-h-0 flex-1 bg-[#F8FAFC] p-4">
-                <div className="space-y-4">
-                    {sortedMessages.map((msg) => {
+            <ScrollArea className="chat-canvas min-h-0 flex-1 px-3 py-5 sm:px-5 lg:px-8">
+                <div className="mx-auto max-w-5xl space-y-4">
+                    {messages.map((msg) => {
                         const isMe = msg.senderId === currentUser?.id;
                         const isDeleted = Boolean(msg.deletedAt);
                         const repliedMessage = messages.find(
@@ -95,10 +87,11 @@ const sortedMessages = [...messages].sort((a, b) => {
                                 className={`group flex ${isMe ? "justify-end" : "justify-start"}`}
                             >
                                 <div
-                                    className={`relative max-w-[75%] rounded-2xl px-4 py-2 text-sm ${isMe
-                                        ? "bg-[#3e72e0] text-white"
-                                        : "border border-[#E2E8F0] bg-white text-[#0F172A]"
-                                        } ${isDeleted ? "opacity-80 italic" : ""}`}
+                                    className={`relative max-w-[86%] rounded-[22px] px-4 py-3 text-sm shadow-sm sm:max-w-[72%] ${
+                                        isMe
+                                            ? "bg-gradient-to-br from-indigo-600 to-blue-600 text-white shadow-indigo-500/15"
+                                            : "border border-slate-200/80 bg-white/95 text-slate-800 shadow-slate-200/50"
+                                    } ${isDeleted ? "opacity-80 italic" : ""}`}
                                 >
                                     {msg.uploading && (
                                         <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-black/55">
@@ -119,27 +112,26 @@ const sortedMessages = [...messages].sort((a, b) => {
 
                                     {!isDeleted && !msg.sending && !msg.uploading && (
                                         <div
-
-                                            className={`absolute top-1 transition
-    opacity-100 md:opacity-0 md:group-hover:opacity-100
-    ${isMe ? "-left-9" : "-right-9"}
-  `}
+                                            className={`absolute top-1 transition opacity-100 md:opacity-0 md:group-hover:opacity-100 ${isMe ? "-left-9" : "-right-9"}`}
                                         >
-
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
                                                     <button
                                                         type="button"
-                                                        className="flex h-8 w-8 items-center justify-center rounded-full text-[#64748B] hover:bg-[#E2E8F0]"
+                                                        className={`flex h-8 w-8 items-center justify-center rounded-xl shadow-sm backdrop-blur-sm ${
+                                                            isMe
+                                                                ? "bg-slate-950/20 text-white hover:bg-slate-950/30"
+                                                                : "bg-white text-slate-500 hover:bg-slate-100"
+                                                        }`}
                                                     >
                                                         <MoreVertical className="h-4 w-4" />
                                                     </button>
                                                 </DropdownMenuTrigger>
 
-                                                <DropdownMenuContent align={isMe ? "end" : "start"}>
+                                                <DropdownMenuContent align={isMe ? "end" : "start"} className="w-56 rounded-2xl border-slate-200/80 p-2 shadow-xl">
                                                     <DropdownMenuItem
                                                         onSelect={(event) => event.preventDefault()}
-                                                        className="flex gap-2 overflow-x-auto hide-scrollbar"
+                                                        className="flex gap-2 overflow-x-auto rounded-xl bg-slate-50 p-2 hide-scrollbar"
                                                     >
                                                         {reactionOptions.map((emoji) => (
                                                             <button
@@ -153,19 +145,19 @@ const sortedMessages = [...messages].sort((a, b) => {
                                                                         emoji,
                                                                     })
                                                                 }
-                                                                className="text-lg transition hover:scale-125"
+                                                                className="rounded-lg p-1 text-lg transition hover:scale-125 hover:bg-white"
                                                             >
                                                                 {emoji}
                                                             </button>
                                                         ))}
                                                     </DropdownMenuItem>
 
-                                                    <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
+                                                    <DropdownMenuItem onClick={() => setReplyingTo(msg)} className="rounded-xl py-2.5">
                                                         Reply
                                                     </DropdownMenuItem>
 
                                                     {isMe && msg.type === "text" && (
-                                                        <DropdownMenuItem onClick={() => handleEdit(msg)}>
+                                                        <DropdownMenuItem onClick={() => handleEdit(msg)} className="rounded-xl py-2.5">
                                                             Edit
                                                         </DropdownMenuItem>
                                                     )}
@@ -175,7 +167,7 @@ const sortedMessages = [...messages].sort((a, b) => {
                                                             onClick={() =>
                                                                 deleteMutation.mutate({ messageId: msg.id })
                                                             }
-                                                            className="text-red-600"
+                                                            className="rounded-xl text-rose-600 focus:bg-rose-50 focus:text-rose-700"
                                                         >
                                                             Delete
                                                         </DropdownMenuItem>
@@ -187,8 +179,9 @@ const sortedMessages = [...messages].sort((a, b) => {
 
                                     {msg.reactions?.length > 0 && (
                                         <div
-                                            className={`absolute -bottom-3 ${isMe ? "right-2" : "left-2"
-                                                } flex rounded-full border bg-white px-2 py-0.5 text-[#0F172A] shadow-sm`}
+                                            className={`absolute -bottom-3 ${
+                                                isMe ? "right-2" : "left-2"
+                                            } flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-800 shadow-md`}
                                         >
                                             {[...new Set(msg.reactions.map((item) => item.emoji))].map(
                                                 (emoji) => (
@@ -207,10 +200,11 @@ const sortedMessages = [...messages].sort((a, b) => {
 
                                     {repliedMessage && !isDeleted && (
                                         <div
-                                            className={`mb-2 rounded-lg border-l-4 px-3 py-2 ${isMe
-                                                ? "border-white/70 bg-white/10"
-                                                : "border-[#2563EB] bg-[#F1F5F9]"
-                                                }`}
+                                            className={`mb-2 rounded-lg border-l-4 px-3 py-2 ${
+                                                isMe
+                                                    ? "border-cyan-200 bg-white/10"
+                                                    : "border-indigo-500 bg-indigo-50/80"
+                                            }`}
                                         >
                                             <p className="text-xs font-medium opacity-80">
                                                 {repliedMessage.senderId === currentUser?.id
@@ -245,9 +239,9 @@ const sortedMessages = [...messages].sort((a, b) => {
                                             target="_blank"
                                             rel="noreferrer"
                                             download={msg.fileName}
-                                            className="flex min-w-[220px] items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white p-3 text-[#0F172A]"
+                                            className="flex min-w-[220px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/40"
                                         >
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#EAF1FF] text-[#2563EB]">
+                                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                                                 <FileText className="h-5 w-5" />
                                             </div>
                                             <div className="min-w-0 flex-1">
@@ -266,25 +260,30 @@ const sortedMessages = [...messages].sort((a, b) => {
                                         <p>{msg.text}</p>
                                     )}
 
-                                    <div className="mt-1 flex items-center justify-end gap-1">
+                                    <div className="mt-2 flex items-center justify-end gap-1.5">
                                         {msg.editedAt && !isDeleted && (
                                             <span className="text-[11px] opacity-70">edited</span>
                                         )}
                                         <span
-                                            className={`text-[11px] ${isMe ? "text-white/70" : "text-[#94A3B8]"
-                                                }`}
+                                            className={`text-[11px] ${
+                                                isMe ? "text-white/70" : "text-slate-400"
+                                            }`}
                                         >
-                                            {formatMessageTime(msg.createdAt || msg.created_at)}
+                                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                            })}
                                         </span>
 
                                         {isMe && !isDeleted && (
                                             <span
-                                                className={`text-[12px] font-semibold ${msg.failed
-                                                    ? "text-red-200"
-                                                    : msg.seen
-                                                        ? "text-black"
-                                                        : "text-white/80"
-                                                    }`}
+                                                className={`text-[12px] font-semibold ${
+                                                    msg.failed
+                                                        ? "text-red-200"
+                                                        : msg.seen
+                                                            ? "text-black"
+                                                            : "text-white/80"
+                                                }`}
                                             >
                                                 {msg.failed
                                                     ? "!"

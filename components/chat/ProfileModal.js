@@ -123,23 +123,26 @@ export default function ProfileModal({ open, onOpenChange }) {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md rounded-2xl">
-                <DialogHeader>
-                    <DialogTitle>Edit Profile</DialogTitle>
-                </DialogHeader>
+            <DialogContent className="max-w-md overflow-hidden rounded-[30px] border-slate-200/80 p-0 shadow-2xl">
+                <div className="bg-gradient-to-br from-indigo-600 via-indigo-600 to-cyan-500 px-6 py-6 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-extrabold tracking-[-0.02em] text-white">Your profile</DialogTitle>
+                    </DialogHeader>
+                    <p className="mt-1 text-sm text-indigo-100">Keep your details fresh and recognizable.</p>
+                </div>
 
                 {isPending ? (
                     <div className="flex min-h-[260px] items-center justify-center">
                         <LoaderCircle className="h-6 w-6 animate-spin text-[#2563EB]" />
                     </div>
                 ) : (
-                    <div className="space-y-5">
+                    <div className="space-y-5 p-6">
                         <div className="flex flex-col items-center">
                             <div className="group relative">
-                                <Avatar className="h-28 w-28 border-4 border-white shadow-md">
+                                <Avatar className="h-28 w-28 border-4 border-white shadow-xl ring-4 ring-indigo-50">
                                     <AvatarImage src={previewUrl || ""} />
 
-                                    <AvatarFallback className="bg-[#EAF1FF] text-[#2563EB]">
+                                    <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-cyan-500 text-white">
                                         {name?.charAt(0)?.toUpperCase() || (
                                             <UserRound className="h-9 w-9" />
                                         )}
@@ -150,7 +153,7 @@ export default function ProfileModal({ open, onOpenChange }) {
                                     type="button"
                                     disabled={isUploading}
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-[#2563EB] text-white shadow-md transition hover:bg-[#1D4ED8] disabled:cursor-not-allowed"
+                                    className="absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center rounded-2xl border-4 border-white bg-gradient-to-br from-indigo-600 to-blue-600 text-white shadow-lg transition hover:from-indigo-500 hover:to-blue-500 disabled:cursor-not-allowed"
                                 >
                                     {isUploading ? (
                                         <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -193,7 +196,7 @@ export default function ProfileModal({ open, onOpenChange }) {
                                 onChange={(event) => setName(event.target.value)}
                                 placeholder="Enter your name"
                                 maxLength={50}
-                                className="h-11 rounded-xl"
+                                className="h-12 rounded-2xl border-slate-200 bg-slate-50/70"
                             />
                         </div>
 
@@ -205,7 +208,7 @@ export default function ProfileModal({ open, onOpenChange }) {
                             <Input
                                 value={profile?.email || ""}
                                 disabled
-                                className="h-11 rounded-xl bg-[#F8FAFC]"
+                                className="h-12 rounded-2xl border-slate-200 bg-slate-100/80"
                             />
 
                             <p className="text-xs text-[#94A3B8]">
@@ -226,7 +229,7 @@ export default function ProfileModal({ open, onOpenChange }) {
                                 type="button"
                                 onClick={handleSave}
                                 disabled={isUploading || updateProfile.isPending}
-                                className="bg-[#2563EB] hover:bg-[#1D4ED8]"
+                                className="rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-5 shadow-lg shadow-indigo-500/20 hover:from-indigo-500 hover:to-blue-500"
                             >
                                 {updateProfile.isPending
                                     ? "Saving..."

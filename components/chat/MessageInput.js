@@ -484,14 +484,14 @@ export default function MessageInput({ selectedChat,
     const fileInputRef = useRef(null);
 
     return (
-        <div className="relative border-t border-[#E2E8F0] bg-white p-4">
+        <div className="relative shrink-0 border-t border-slate-200/70 bg-white/90 px-3 py-3 backdrop-blur-xl sm:px-5 sm:py-4">
             {editingMessage && (
-                <div className="mb-3 flex items-center justify-between rounded-xl border border-[#DBEAFE] bg-[#EFF6FF] px-4 py-2">
+                <div className="mx-auto mb-3 flex max-w-5xl items-center justify-between rounded-2xl border border-indigo-200 bg-indigo-50/90 px-4 py-3 shadow-sm">
                     <div>
-                        <p className="text-xs font-medium text-[#2563EB]">
+                        <p className="text-xs font-bold uppercase tracking-[0.12em] text-indigo-600">
                             Editing message
                         </p>
-                        <p className="max-w-[260px] truncate text-sm text-[#64748B]">
+                        <p className="mt-0.5 max-w-[320px] truncate text-sm font-medium text-slate-500">
                             {editingMessage.text}
                         </p>
                     </div>
@@ -510,20 +510,20 @@ export default function MessageInput({ selectedChat,
             )}
 
             {selectedFile && (
-                <div className="mb-3 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-3">
+                <div className="mx-auto mb-3 max-w-5xl rounded-[24px] border border-slate-200 bg-white p-3 shadow-xl shadow-slate-200/40 sm:p-4">
                     <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                             {selectedFile.type.startsWith("image") && previewUrl ? (
                                 <img
                                     src={previewUrl}
                                     alt="Preview"
-                                    className="max-h-52 w-full rounded-xl object-contain"
+                                    className="max-h-64 w-full rounded-2xl bg-slate-950/5 object-contain"
                                 />
                             ) : selectedFile.type.startsWith("video") && previewUrl ? (
                                 <video
                                     src={previewUrl}
                                     controls
-                                    className="max-h-52 w-full rounded-xl"
+                                    className="max-h-64 w-full rounded-2xl bg-slate-950"
                                 />
                             ) : (
                                 <p className="truncate text-sm font-medium text-[#0F172A]">
@@ -535,7 +535,7 @@ export default function MessageInput({ selectedChat,
                                 value={caption}
                                 onChange={(e) => setCaption(e.target.value)}
                                 placeholder="Add a caption..."
-                                className="mt-3"
+                                className="mt-3 h-11 rounded-xl border-slate-200 bg-slate-50/80"
                             />
                         </div>
 
@@ -560,9 +560,9 @@ export default function MessageInput({ selectedChat,
                                 <span>{uploadProgress}%</span>
                             </div>
 
-                            <div className="h-2 overflow-hidden rounded-full bg-[#E2E8F0]">
+                            <div className="h-2 overflow-hidden rounded-full bg-slate-200">
                                 <div
-                                    className="h-full rounded-full bg-[#2563EB] transition-[width] duration-200"
+                                    className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-cyan-500 transition-[width] duration-200"
                                     style={{ width: `${uploadProgress}%` }}
                                 />
                             </div>
@@ -572,7 +572,7 @@ export default function MessageInput({ selectedChat,
                         type="button"
                         onClick={handleUploadAndSend}
                         disabled={isUploading}
-                        className="mt-3 w-full bg-[#2563EB] hover:bg-[#1D4ED8]"
+                        className="mt-3 h-11 w-full rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 font-semibold shadow-lg shadow-indigo-500/20 hover:from-indigo-500 hover:to-blue-500"
                     >
                         {isUploading
                             ? `Uploading ${uploadProgress}%`
@@ -584,7 +584,7 @@ export default function MessageInput({ selectedChat,
             {showEmoji && (
                 <div
                     ref={emojiRef}
-                    className="absolute bottom-20 left-4 z-50"
+                    className="absolute bottom-20 left-3 z-50 overflow-hidden rounded-2xl shadow-2xl sm:left-5"
                 >
                     <EmojiPicker
                         onEmojiClick={(emojiData) => {
@@ -595,7 +595,7 @@ export default function MessageInput({ selectedChat,
                 </div>
             )}
             {isRecording ? (
-                <div className="flex w-full items-center gap-3 rounded-xl bg-red-50 px-4 py-2">
+                <div className="mx-auto flex w-full max-w-5xl items-center gap-3 rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 shadow-sm">
                     <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
 
                     <p className="flex-1 text-sm font-medium text-red-600">
@@ -621,7 +621,7 @@ export default function MessageInput({ selectedChat,
                     </Button>
                 </div>
             ) : recordedAudio ? (
-                <div className="flex w-full items-center gap-3 rounded-xl bg-[#F8FAFC] p-2">
+                <div className="mx-auto flex w-full max-w-5xl items-center gap-3 rounded-[22px] border border-slate-200 bg-slate-50 p-2.5 shadow-sm">
                     <audio
                         src={recordedAudio.url}
                         controls
@@ -642,19 +642,19 @@ export default function MessageInput({ selectedChat,
                         size="icon"
                         disabled={isUploading}
                         onClick={sendVoiceMessage}
-                        className="rounded-full bg-[#2563EB] hover:bg-[#1D4ED8]"
+                        className="rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 shadow-lg shadow-indigo-500/20 hover:from-indigo-500 hover:to-blue-500"
                     >
                         <Send className="h-5 w-5" />
                     </Button>
                 </div>
             ) : (
-                <div className="flex items-center gap-2">
+                <div className="mx-auto flex max-w-5xl items-center gap-1.5 rounded-[24px] border border-slate-200 bg-slate-50/90 p-1.5 shadow-inner shadow-slate-100 sm:gap-2">
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => setShowEmoji((prev) => !prev)}
                     >
-                        <Smile className="size-5 text-[#64748B]" />
+                        <Smile className="size-5 text-slate-500" />
                     </Button>
 
                     <input
@@ -670,12 +670,12 @@ export default function MessageInput({ selectedChat,
                         size="icon"
                         onClick={() => fileInputRef.current?.click()}
                     >
-                        <Image className="size-5 text-[#64748B]" />
+                        <Image className="size-5 text-slate-500" />
                     </Button>
                     {replyingTo && (
-                        <div className="mb-3 flex items-center justify-between rounded-xl border-l-4 border-[#2563EB] bg-[#EFF6FF] px-4 py-3">
+                        <div className="mb-3 flex items-center justify-between rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 shadow-sm">
                             <div className="min-w-0">
-                                <p className="text-xs font-semibold text-[#2563EB]">
+                                <p className="text-xs font-bold uppercase tracking-[0.12em] text-indigo-600">
                                     Replying to message
                                 </p>
 
@@ -734,14 +734,14 @@ export default function MessageInput({ selectedChat,
                             }
                         }}
                         placeholder="Type a message..."
-                        className="h-11 flex-1 rounded-xl border-[#E2E8F0] bg-[#F8FAFC]"
+                        className="h-11 flex-1 border-0 bg-transparent px-2 text-[15px] font-medium text-slate-800 shadow-none placeholder:text-slate-400 focus-visible:ring-0"
                     />
 
                     <Button
                         onClick={handleSend}
                         disabled={!text.trim()}
                         size="icon"
-                        className="h-11 w-11 rounded-full bg-[#2563EB] hover:bg-[#1D4ED8]"
+                        className="h-11 w-11 shrink-0 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 shadow-lg shadow-indigo-500/25 hover:from-indigo-500 hover:to-blue-500"
                     >
                         <Send className="size-5" />
                     </Button>
@@ -751,7 +751,7 @@ export default function MessageInput({ selectedChat,
                         size="icon"
                         onClick={startRecording}
                     >
-                        <Mic className="h-5 w-5 text-[#64748B]" />
+                        <Mic className="h-5 w-5 text-slate-500" />
                     </Button>
                 </div>
             )}

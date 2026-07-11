@@ -153,7 +153,7 @@ export default function DownloadableMedia({
      */
     if (!isDownloaded && !isMe) {
         return (
-            <div className="relative min-h-[190px] min-w-[240px] overflow-hidden rounded-xl bg-[#CBD5E1]">
+            <div className="relative min-h-[190px] min-w-[240px] overflow-hidden rounded-2xl bg-slate-300 shadow-inner">
                 {message.type === "image" && (
                     <Image
                         src={message.fileUrl}
@@ -186,7 +186,7 @@ export default function DownloadableMedia({
                         type="button"
                         onClick={downloadMedia}
                         disabled={isDownloading}
-                        className="flex h-14 w-14 items-center justify-center rounded-full bg-black/65 backdrop-blur-sm transition hover:bg-black/80 disabled:cursor-not-allowed"
+                        className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-white ring-1 ring-white/20 backdrop-blur-xl transition hover:bg-white/25 disabled:cursor-not-allowed"
                     >
                         {isDownloading ? (
                             <LoaderCircle className="h-7 w-7 animate-spin" />
@@ -241,7 +241,7 @@ export default function DownloadableMedia({
                         fileUrl: localUrl || message.fileUrl,
                     })
                 }
-                className="block overflow-hidden rounded-xl"
+                className="block overflow-hidden rounded-2xl ring-1 ring-black/5"
             >
                 <Image
                     src={localUrl || message.fileUrl}
@@ -249,7 +249,7 @@ export default function DownloadableMedia({
                     width={320}
                     height={320}
                     unoptimized={localUrl?.startsWith("blob:")}
-                    className="max-h-64 w-full rounded-xl object-cover"
+                    className="max-h-72 w-full rounded-2xl object-cover transition duration-300 hover:scale-[1.01]"
                 />
             </button>
         );
@@ -257,12 +257,12 @@ export default function DownloadableMedia({
 
     if (message.type === "video") {
         return (
-            <div className="relative overflow-hidden rounded-xl bg-black">
+            <div className="relative overflow-hidden rounded-2xl bg-slate-950 ring-1 ring-black/10">
                 <video
                     src={localUrl || message.fileUrl}
                     controls
                     preload="metadata"
-                    className="max-h-64 w-full rounded-xl"
+                    className="max-h-72 w-full rounded-2xl"
                 />
 
                 <button
@@ -273,7 +273,7 @@ export default function DownloadableMedia({
                             fileUrl: localUrl || message.fileUrl,
                         })
                     }
-                    className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/65 px-3 py-1.5 text-xs text-white backdrop-blur-sm"
+                    className="absolute left-2 top-2 flex items-center gap-1.5 rounded-xl bg-slate-950/70 px-3 py-2 text-xs font-semibold text-white backdrop-blur-xl"
                 >
                     <Play className="h-3.5 w-3.5" />
                     Full screen
@@ -284,7 +284,7 @@ export default function DownloadableMedia({
 
     if (message.type === "audio") {
         return (
-            <div className="min-w-[240px] rounded-xl bg-white p-3 text-[#0F172A]">
+            <div className="min-w-[240px] rounded-2xl bg-white/95 p-3 text-slate-800 ring-1 ring-slate-200/80">
                 <div className="mb-2 flex items-center gap-2">
                     <Music className="h-5 w-5 text-[#2563EB]" />
 

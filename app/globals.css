@@ -139,3 +139,36 @@
     @apply font-sans;
   }
 }
+
+/* Premium chat visual system */
+body {
+  background: #eef2ff;
+}
+
+.chat-shell {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(99, 102, 241, 0.12), transparent 30%),
+    radial-gradient(circle at 88% 82%, rgba(6, 182, 212, 0.10), transparent 28%),
+    linear-gradient(135deg, #eef2ff 0%, #f8fafc 48%, #ecfeff 100%);
+}
+
+.chat-canvas {
+  background-color: #f8fafc;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(99, 102, 241, 0.055) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.chat-canvas [data-radix-scroll-area-viewport] {
+  scroll-behavior: smooth;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

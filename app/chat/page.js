@@ -84,11 +84,11 @@ export default function ChatPage() {
         : selectedChat;
 
     return (
-        <div className="h-screen overflow-hidden bg-[#F8FAFC]">
-            <div className="flex h-full overflow-hidden">
+        <div className="chat-shell h-dvh overflow-hidden p-0 md:p-3 lg:p-5">
+            <div className="mx-auto flex h-full max-w-[1680px] overflow-hidden bg-white shadow-2xl shadow-indigo-950/10 md:rounded-[28px] md:border md:border-white/80">
                 <div
                     className={`${selectedChat ? "hidden md:flex" : "flex"
-                        } h-full min-h-0 w-full flex-col md:w-[360px]`}
+                        } h-full min-h-0 w-full flex-col md:w-[380px] lg:w-[400px]`}
                 >
                     <ChatSidebar
                         selectedChat={selectedChat}
@@ -101,7 +101,7 @@ export default function ChatPage() {
 
                 <main
                     className={`${selectedChat ? "flex" : "hidden md:flex"
-                        } h-full min-h-0 flex-1 flex-col overflow-hidden`}
+                        } h-full min-h-0 flex-1 flex-col overflow-hidden bg-slate-50`}
                 >
                     {selectedChat ? (
                         <>
@@ -130,8 +130,14 @@ export default function ChatPage() {
                             />
                         </>
                     ) : (
-                        <div className="hidden flex-1 items-center justify-center text-[#64748B] md:flex">
-                            Select a chat to start messaging
+                        <div className="hidden flex-1 items-center justify-center px-8 text-center md:flex">
+                            <div className="max-w-md">
+                                <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-[32px] bg-gradient-to-br from-indigo-600 to-cyan-500 text-white shadow-2xl shadow-indigo-500/25">
+                                    <span className="text-4xl">✦</span>
+                                </div>
+                                <h2 className="text-2xl font-extrabold tracking-[-0.03em] text-slate-900">Your conversations, beautifully organized.</h2>
+                                <p className="mt-3 text-sm leading-6 text-slate-500">Choose a conversation from the sidebar or start a new chat to begin messaging.</p>
+                            </div>
                         </div>
                     )}
                 </main>
