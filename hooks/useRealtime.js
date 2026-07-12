@@ -20,7 +20,16 @@ function normalizeRealtimeDate(value) {
 
     return `${stringValue}Z`;
 }
+let notificationAudio;
+function playNotificationSound() {
+    if (!notificationAudio) {
+        notificationAudio = new Audio("/notification.mp3");
+        notificationAudio.volume = 0.6;
+    }
 
+    notificationAudio.currentTime = 0;
+    notificationAudio.play().catch(() => { });
+}
 function normalizeMessage(raw) {
     return {
         id: raw.id,
@@ -159,6 +168,7 @@ export function useRealtime(currentUser, activeConversationId,
                         realtimeMessage.conversationId === activeConversationId;
 
                     if (!isMyMessage && !isCurrentChat) {
+                        playNotificationSound();
                         const conversations =
                             queryClient.getQueryData(["conversations"]) || [];
 

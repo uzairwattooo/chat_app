@@ -1,6 +1,6 @@
 "use client";
 
-import UserCard from "./UserCard";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function UserList({ users, selectedChat, setSelectedChat, onlineUsers }) {
@@ -30,8 +30,8 @@ export default function UserList({ users, selectedChat, setSelectedChat, onlineU
                             })
                         }
                         className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${isSelected
-                                ? "bg-indigo-50 ring-1 ring-indigo-100"
-                                : "hover:bg-slate-50"
+                            ? "bg-indigo-50 ring-1 ring-indigo-100"
+                            : "hover:bg-slate-50"
                             }`}
                     >
                         <div className="relative shrink-0">
@@ -60,8 +60,8 @@ export default function UserList({ users, selectedChat, setSelectedChat, onlineU
                             <div className="flex items-center justify-between gap-3">
                                 <p
                                     className={`truncate text-sm ${hasUnread
-                                            ? "font-extrabold text-slate-950"
-                                            : "font-bold text-slate-800"
+                                        ? "font-extrabold text-slate-950"
+                                        : "font-bold text-slate-800"
                                         }`}
                                 >
                                     {conversation.user.name}
@@ -69,8 +69,8 @@ export default function UserList({ users, selectedChat, setSelectedChat, onlineU
 
                                 <span
                                     className={`shrink-0 text-[11px] ${hasUnread
-                                            ? "font-bold text-red-500"
-                                            : "font-medium text-slate-400"
+                                        ? "font-bold text-red-500"
+                                        : "font-medium text-slate-400"
                                         }`}
                                 >
                                     {conversation.lastMessageTime
@@ -87,8 +87,8 @@ export default function UserList({ users, selectedChat, setSelectedChat, onlineU
                             <div className="mt-1 flex items-center justify-between gap-3">
                                 <p
                                     className={`truncate text-xs ${hasUnread
-                                            ? "font-semibold text-slate-700"
-                                            : "font-medium text-slate-400"
+                                        ? "font-semibold text-slate-700"
+                                        : "font-medium text-slate-400"
                                         }`}
                                 >
                                     {conversation.lastMessage || "No messages yet"}
